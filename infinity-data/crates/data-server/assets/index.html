@@ -1,0 +1,44 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Infinity Data</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="mark">∞</span><div><strong>Infinity Data</strong><small>Analytics + Vector DB</small></div></div>
+      <nav>
+        <button data-view="overview" class="active">Overview</button>
+        <button data-view="collections">Collections</button>
+        <button data-view="search">Vector Search</button>
+        <button data-view="users">Users / RBAC</button>
+        <button data-view="audit">Audit</button>
+      </nav>
+      <button id="logout" class="ghost">Logout</button>
+    </aside>
+    <main>
+      <section id="login" class="login card">
+        <div class="brand large"><span class="mark">∞</span><div><strong>Infinity Data</strong><small>Sign in to the admin console</small></div></div>
+        <form id="loginForm">
+          <label>Email<input name="email" value="admin@infinity.local" autocomplete="username" /></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" /></label>
+          <button>Sign in</button>
+        </form>
+      </section>
+      <section id="shell" class="hidden">
+        <header><h1 id="title">Overview</h1><div id="me"></div></header>
+        <div id="notice"></div>
+        <div id="overview" class="view grid stats"></div>
+        <div id="collections" class="view hidden"></div>
+        <div id="search" class="view hidden"></div>
+        <div id="users" class="view hidden"></div>
+        <div id="audit" class="view hidden"></div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

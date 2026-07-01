@@ -1,0 +1,14 @@
+﻿/target/
+target/
+/data/
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.pem
+*signing*key*
+*.log
+.env
+.env.*
+!.env.example

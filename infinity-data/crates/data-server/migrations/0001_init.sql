@@ -9,6 +9,23 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS roles (
+    name        TEXT PRIMARY KEY,
+    description TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_name  TEXT NOT NULL REFERENCES roles(name) ON DELETE CASCADE,
+    permission TEXT NOT NULL,
+    PRIMARY KEY (role_name, permission)
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_name TEXT NOT NULL REFERENCES roles(name) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, role_name)
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id         TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
@@ -32,6 +49,16 @@ CREATE TABLE IF NOT EXISTS collections (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS vector_points (
+    collection_name TEXT NOT NULL REFERENCES collections(name) ON DELETE CASCADE,
+    id              TEXT NOT NULL,
+    vector_json     TEXT NOT NULL,
+    metadata_json   TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    PRIMARY KEY (collection_name, id)
+);
+
 CREATE TABLE IF NOT EXISTS analytics_tables (
     name       TEXT PRIMARY KEY,
     columns    TEXT NOT NULL,
@@ -45,4 +72,17 @@ CREATE TABLE IF NOT EXISTS table_rows (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS audit_log (
+    id            TEXT PRIMARY KEY,
+    actor_user_id TEXT,
+    event         TEXT NOT NULL,
+    target        TEXT,
+    detail_json   TEXT,
+    ip            TEXT,
+    user_agent    TEXT,
+    created_at    TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_table_rows_table ON table_rows(table_name);
+CREATE INDEX IF NOT EXISTS idx_vector_points_collection ON vector_points(collection_name);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);

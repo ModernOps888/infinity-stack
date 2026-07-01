@@ -16,3 +16,6 @@ signing_key.pem
 .env
 
 *.err
+
+# internal launch kit - do not publish
+marketing/

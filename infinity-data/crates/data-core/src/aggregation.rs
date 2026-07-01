@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -7,7 +7,15 @@ use crate::error::{CoreError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum FilterOp { Eq, Ne, Gt, Lt, Gte, Lte, Contains }
+pub enum FilterOp {
+    Eq,
+    Ne,
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Contains,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Filter {
@@ -18,7 +26,13 @@ pub struct Filter {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AggregateOp { Count, Sum, Avg, Min, Max }
+pub enum AggregateOp {
+    Count,
+    Sum,
+    Avg,
+    Min,
+    Max,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateSpec {
@@ -29,7 +43,9 @@ pub struct AggregateSpec {
     pub alias: String,
 }
 
-fn default_alias() -> String { "value".into() }
+fn default_alias() -> String {
+    "value".into()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Query {
@@ -44,11 +60,22 @@ pub struct Query {
 }
 
 pub fn run_query(rows: &[Value], query: &Query) -> Result<Vec<Value>> {
-    let filtered: Vec<&Value> = rows.iter().filter(|row| matches_all(row, &query.filters)).collect();
+    let filtered: Vec<&Value> = rows
+        .iter()
+        .filter(|row| matches_all(row, &query.filters))
+        .collect();
     if let Some(group_col) = &query.group_by {
-        let agg = query.aggregate.as_ref().ok_or_else(|| CoreError::Invalid("group_by requires aggregate".into()))?;
+        let agg = query
+            .aggregate
+            .as_ref()
+            .ok_or_else(|| CoreError::Invalid("group_by requires aggregate".into()))?;
         let mut groups: BTreeMap<String, Vec<&Value>> = BTreeMap::new();
-        for row in filtered { groups.entry(group_key(row, group_col)).or_default().push(row); }
+        for row in filtered {
+            groups
+                .entry(group_key(row, group_col))
+                .or_default()
+                .push(row);
+        }
         let mut out = Vec::new();
         for (key, group) in groups {
             let mut obj = Map::new();
@@ -63,7 +90,10 @@ pub fn run_query(rows: &[Value], query: &Query) -> Result<Vec<Value>> {
         obj.insert(agg.alias.clone(), aggregate(&filtered, agg)?);
         return Ok(vec![Value::Object(obj)]);
     }
-    Ok(filtered.into_iter().map(|row| project(row, query.select.as_deref())).collect())
+    Ok(filtered
+        .into_iter()
+        .map(|row| project(row, query.select.as_deref()))
+        .collect())
 }
 
 fn matches_all(row: &Value, filters: &[Filter]) -> bool {
@@ -71,14 +101,19 @@ fn matches_all(row: &Value, filters: &[Filter]) -> bool {
 }
 
 fn matches_filter(row: &Value, filter: &Filter) -> bool {
-    let Some(actual) = row.get(&filter.column) else { return false; };
+    let Some(actual) = row.get(&filter.column) else {
+        return false;
+    };
     match filter.op {
         FilterOp::Eq => actual == &filter.value,
         FilterOp::Ne => actual != &filter.value,
         FilterOp::Gt => cmp(actual, &filter.value).is_some_and(|o| o == Ordering::Greater),
         FilterOp::Lt => cmp(actual, &filter.value).is_some_and(|o| o == Ordering::Less),
-        FilterOp::Gte => cmp(actual, &filter.value).is_some_and(|o| o == Ordering::Greater || o == Ordering::Equal),
-        FilterOp::Lte => cmp(actual, &filter.value).is_some_and(|o| o == Ordering::Less || o == Ordering::Equal),
+        FilterOp::Gte => cmp(actual, &filter.value)
+            .is_some_and(|o| o == Ordering::Greater || o == Ordering::Equal),
+        FilterOp::Lte => {
+            cmp(actual, &filter.value).is_some_and(|o| o == Ordering::Less || o == Ordering::Equal)
+        }
         FilterOp::Contains => contains(actual, &filter.value),
     }
 }
@@ -108,16 +143,26 @@ fn group_key(row: &Value, column: &str) -> String {
 }
 
 fn number(v: f64) -> Value {
-    Number::from_f64(v).map(Value::Number).unwrap_or(Value::Null)
+    Number::from_f64(v)
+        .map(Value::Number)
+        .unwrap_or(Value::Null)
 }
 
 fn aggregate(rows: &[&Value], agg: &AggregateSpec) -> Result<Value> {
     match agg.op {
         AggregateOp::Count => Ok(Value::Number((rows.len() as u64).into())),
         AggregateOp::Sum | AggregateOp::Avg | AggregateOp::Min | AggregateOp::Max => {
-            let col = agg.column.as_ref().ok_or_else(|| CoreError::Invalid("numeric aggregate requires column".into()))?;
-            let values: Vec<f64> = rows.iter().filter_map(|r| r.get(col).and_then(Value::as_f64)).collect();
-            if values.is_empty() { return Ok(Value::Null); }
+            let col = agg
+                .column
+                .as_ref()
+                .ok_or_else(|| CoreError::Invalid("numeric aggregate requires column".into()))?;
+            let values: Vec<f64> = rows
+                .iter()
+                .filter_map(|r| r.get(col).and_then(Value::as_f64))
+                .collect();
+            if values.is_empty() {
+                return Ok(Value::Null);
+            }
             Ok(match agg.op {
                 AggregateOp::Sum => number(values.iter().sum()),
                 AggregateOp::Avg => number(values.iter().sum::<f64>() / values.len() as f64),
@@ -130,10 +175,14 @@ fn aggregate(rows: &[&Value], agg: &AggregateSpec) -> Result<Value> {
 }
 
 fn project(row: &Value, select: Option<&[String]>) -> Value {
-    let Some(cols) = select else { return row.clone(); };
+    let Some(cols) = select else {
+        return row.clone();
+    };
     let mut obj = Map::new();
     for col in cols {
-        if let Some(v) = row.get(col) { obj.insert(col.clone(), v.clone()); }
+        if let Some(v) = row.get(col) {
+            obj.insert(col.clone(), v.clone());
+        }
     }
     Value::Object(obj)
 }
@@ -152,21 +201,47 @@ mod tests {
             json!({"region":"us","amount":3,"name":"alphabet"}),
         ];
         let q = Query {
-            filters: vec![Filter { column: "name".into(), op: FilterOp::Contains, value: json!("a") }],
+            filters: vec![Filter {
+                column: "name".into(),
+                op: FilterOp::Contains,
+                value: json!("a"),
+            }],
             group_by: Some("region".into()),
-            aggregate: Some(AggregateSpec { op: AggregateOp::Sum, column: Some("amount".into()), alias: "total".into() }),
+            aggregate: Some(AggregateSpec {
+                op: AggregateOp::Sum,
+                column: Some("amount".into()),
+                alias: "total".into(),
+            }),
             select: None,
         };
         let out = run_query(&rows, &q).unwrap();
-        assert_eq!(out, vec![json!({"region":"eu","total":30.0}), json!({"region":"us","total":10.0})]);
+        assert_eq!(
+            out,
+            vec![
+                json!({"region":"eu","total":30.0}),
+                json!({"region":"us","total":10.0})
+            ]
+        );
     }
 
     #[test]
     fn filters_and_avg() {
-        let rows = vec![json!({"kind":"a","v":1}), json!({"kind":"a","v":3}), json!({"kind":"b","v":99})];
+        let rows = vec![
+            json!({"kind":"a","v":1}),
+            json!({"kind":"a","v":3}),
+            json!({"kind":"b","v":99}),
+        ];
         let q = Query {
-            filters: vec![Filter { column: "kind".into(), op: FilterOp::Eq, value: json!("a") }],
-            aggregate: Some(AggregateSpec { op: AggregateOp::Avg, column: Some("v".into()), alias: "avg_v".into() }),
+            filters: vec![Filter {
+                column: "kind".into(),
+                op: FilterOp::Eq,
+                value: json!("a"),
+            }],
+            aggregate: Some(AggregateSpec {
+                op: AggregateOp::Avg,
+                column: Some("v".into()),
+                alias: "avg_v".into(),
+            }),
             ..Default::default()
         };
         assert_eq!(run_query(&rows, &q).unwrap(), vec![json!({"avg_v":2.0})]);

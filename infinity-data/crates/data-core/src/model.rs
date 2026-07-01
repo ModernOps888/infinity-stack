@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
@@ -22,9 +22,18 @@ impl Metric {
                     na += x * x;
                     nb += y * y;
                 }
-                if na <= f32::EPSILON || nb <= f32::EPSILON { 1.0 } else { 1.0 - dot / (na.sqrt() * nb.sqrt()) }
+                if na <= f32::EPSILON || nb <= f32::EPSILON {
+                    1.0
+                } else {
+                    1.0 - dot / (na.sqrt() * nb.sqrt())
+                }
             }
-            Metric::L2 => a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum::<f32>().sqrt(),
+            Metric::L2 => a
+                .iter()
+                .zip(b)
+                .map(|(x, y)| (x - y) * (x - y))
+                .sum::<f32>()
+                .sqrt(),
             Metric::Dot => -a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>(),
         }
     }
@@ -52,7 +61,11 @@ impl FromStr for Metric {
 
 impl fmt::Display for Metric {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self { Metric::Cosine => "cosine", Metric::L2 => "l2", Metric::Dot => "dot" })
+        f.write_str(match self {
+            Metric::Cosine => "cosine",
+            Metric::L2 => "l2",
+            Metric::Dot => "dot",
+        })
     }
 }
 

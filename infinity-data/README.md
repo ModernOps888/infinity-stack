@@ -1,47 +1,145 @@
-# Infinity Data
+<div align="center">
 
-> Rust-native, S3-backed hybrid analytics + vector database — an alternative to **Snowflake, Databricks and Pinecone**.
->
-> **Status: early scaffold / roadmap.** Part of the [Infinity Stack](../README.md) family. The flagship, production-oriented product today is **[Infinity ID](../infinity-id/)**.
+# 🧠 Infinity Data
 
-## Why
+### Analytics + vector search, in one Rust binary.
 
-Data warehouses lock you in and bill exponentially for compute (DBUs, credits) and memory-bound vector indexing at billion-scale. Infinity Data leans on the modern Rust data ecosystem to deliver distributed analytics and vector search on cheap object storage with predictable cost.
+**Vector collections (HNSW) · similarity search · tables · RBAC · admin dashboard**
 
-## Target architecture
+A self-hostable alternative to **Snowflake, Databricks and Pinecone** — memory-safe, SQLite-simple, no per-credit billing.
+
+[![Rust](https://img.shields.io/badge/built%20with-Rust-000000?logo=rust)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](../infinity-id/LICENSE)
+[![Status](https://img.shields.io/badge/status-alpha-orange)]()
+
+</div>
+
+---
+
+## Why Infinity Data
+
+Data warehouses lock you in and bill exponentially for compute; managed vector databases are memory-bound and expensive at scale. Infinity Data gives you **vector similarity search (HNSW)** and simple **tabular analytics** behind one authenticated Rust binary you can run on a laptop or a cloud box.
+
+> Part of the [**Infinity Stack**](../README.md) — open-source, Rust-native replacements for over-monetized SaaS.
+
+---
+
+## 📸 Dashboard
+
+An embedded dark-theme admin console — no separate frontend to deploy.
+
+| Sign in | Overview |
+|---|---|
+| ![Login](docs/img/login.png) | ![Overview](docs/img/overview.png) |
+
+| Collections | Vector Search |
+|---|---|
+| ![Collections](docs/img/collections.png) | ![Search](docs/img/search.png) |
+
+---
+
+## ✨ Features
+
+- **Vector collections** — create collections with a fixed dimension + distance metric (cosine / L2)
+- **HNSW index** — fast approximate nearest-neighbour search
+- **Similarity search** — top-k search with scores + metadata
+- **Tables** — simple tabular storage + query for analytics
+- **API keys** — scoped keys for programmatic ingest/query (constant-time verified)
+- **RBAC + audit** — role-guarded admin, immutable audit trail
+- **Secure by design** — Argon2id, sessions, rate limiting, hardened headers
+- **One binary** — SQLite-backed; `cargo run` and you're live
+
+---
+
+## 🔒 Security
+
+| Area | Hardening |
+|---|---|
+| Passwords | Argon2id (memory-hard) |
+| API keys | Stored hashed, **constant-time** comparison |
+| Sessions | `HttpOnly` + `SameSite=Strict` cookies, server-side revocation |
+| Access control | RBAC guard on admin + write paths; no unauthenticated data access |
+| Abuse | Per-account login lockout + global per-IP rate limiting |
+| Transport | CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` |
+| Errors | Generic client responses; internal errors logged server-side only |
+| SQL | Parameterized queries throughout |
+
+---
+
+## 🏗️ Architecture
 
 ```
-SQL / vector query ─▶ cost-based planner ─▶ distributed executors (Polars/Arrow)
-                                              │
-                          columnar + vector index (Tantivy) on S3 object storage
-                                              │
-                            Raft consensus (raft-rs) for metadata/coordination
+infinity-data/
+├─ crates/
+│  ├─ data-core     # HNSW index, aggregation, model, config, security
+│  ├─ data-server   # REST API + dashboard  → bin: infinity-data
+│  └─ data-cli      # client / admin CLI     → bin: infinity-data-cli
+└─ crates/data-server/migrations/   # SQLite schema
 ```
 
-- **Engine:** `Polars`/Arrow for dataframes, `Tantivy` for indexing.
-- **Scale-out:** Raft (`raft-rs`) for consensus; out-of-core spilling to avoid OOM on heavy joins.
-- **Hybrid:** unified analytical (OLAP) + vector (ANN) query surface.
+---
 
-## Workspace layout
-
-```
-crates/data-core     # types, planner primitives, config
-crates/data-server   # coordinator + executor + query API
-crates/data-cli      # client / admin CLI
-```
-
-## Build
+## 🚀 Quickstart
 
 ```bash
-cargo build --release
+cd infinity-data
+DATA_ADMIN_PASSWORD='ChooseAStrongOne#2026' cargo run --bin infinity-data
+# open http://localhost:8094  (login: admin@infinity.local)
 ```
 
-## Roadmap
+If you don't set `DATA_ADMIN_PASSWORD`, a strong password is generated and printed once. An initial API key is also printed once at first startup.
 
-- [ ] Parquet/Arrow storage layer on object storage
+---
+
+## 📚 API reference
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Liveness probe |
+| `GET` | `/api/stats` | Collection / vector / table counts |
+| `GET`/`POST` | `/api/collections` | List / create vector collections |
+| `GET`/`DELETE` | `/api/collections/:name` | Get / delete a collection |
+| `POST` | `/api/collections/:name/vectors` | Upsert vectors |
+| `POST` | `/api/collections/:name/search` | k-NN similarity search |
+| `GET`/`POST` | `/api/tables` | List / create tables |
+| `POST` | `/api/tables/:name/rows` | Insert rows |
+| `POST` | `/api/tables/:name/query` | Query rows |
+| `GET`/`POST`/`DELETE` | `/admin/api-keys` | Manage API keys |
+| `GET` | `/admin/audit` | Audit log |
+
+### Vector upsert + search (example)
+
+```bash
+# Create a collection (dim 8, cosine)
+curl -X POST http://localhost:8094/api/collections \
+  -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"products","dim":8,"metric":"cosine"}'
+
+# Upsert vectors
+curl -X POST http://localhost:8094/api/collections/products/vectors \
+  -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"points":[{"id":"p1","vector":[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8],"metadata":{"text":"rust vector db"}}]}'
+
+# Search
+curl -X POST http://localhost:8094/api/collections/products/search \
+  -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"vector":[0.12,0.44,0.9,0.33,0.7,0.15,0.6,0.05],"k":5}'
+```
+
+---
+
+## 🗺️ Roadmap
+
 - [ ] SQL front-end + cost-based optimizer
-- [ ] Vector index (HNSW) with disk spill
-- [ ] Raft-based distributed coordination
+- [ ] Object-storage (S3) columnar backend
+- [ ] Disk-spilling HNSW for billion-scale
+- [ ] Distributed coordination
 - [ ] Auth & RBAC via **Infinity ID**
 
-Licensed under Apache-2.0.
+---
+
+## License
+
+[Apache-2.0](../infinity-id/LICENSE) © Infinity Stack.
+
+> ⚠️ **Alpha software.** Change default credentials and serve over HTTPS before production use.
