@@ -39,6 +39,21 @@ struct StoredRecord {
 }
 
 impl CommitLog {
+    /// Reject topic names that could escape the log root (defense-in-depth;
+    /// the API layer also validates, but never trust a name at the FS sink).
+    fn ensure_safe_topic(topic: &str) -> Result<()> {
+        let safe = !topic.is_empty()
+            && topic.len() <= 128
+            && topic
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if safe {
+            Ok(())
+        } else {
+            Err(CoreError::Invalid(format!("unsafe topic name: {topic:?}")))
+        }
+    }
+
     pub fn open(data_dir: impl AsRef<Path>, segment_max_bytes: u64) -> Result<Self> {
         let root = data_dir.as_ref().join("logs");
         fs::create_dir_all(&root)?;
@@ -52,6 +67,7 @@ impl CommitLog {
     }
 
     pub fn create_partition(&mut self, topic: &str, partition: u32) -> Result<()> {
+        Self::ensure_safe_topic(topic)?;
         fs::create_dir_all(self.partition_dir(topic, partition))?;
         self.partitions
             .entry((topic.to_string(), partition))
@@ -60,6 +76,7 @@ impl CommitLog {
     }
 
     pub fn delete_topic(&mut self, topic: &str) -> Result<()> {
+        Self::ensure_safe_topic(topic)?;
         let dir = self.root.join(topic);
         if dir.exists() {
             fs::remove_dir_all(dir)?;
@@ -125,6 +142,7 @@ impl CommitLog {
         offset: u64,
         max: usize,
     ) -> Result<Vec<LogRecord>> {
+        Self::ensure_safe_topic(topic)?;
         let Some(part) = self.partitions.get(&(topic.to_string(), partition)) else {
             return Ok(vec![]);
         };

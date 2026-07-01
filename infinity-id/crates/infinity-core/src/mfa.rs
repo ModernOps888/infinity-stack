@@ -39,6 +39,40 @@ pub fn verify_totp(secret_b32: &str, code: &str, issuer: &str, account: &str) ->
     t.check_current(code).map_err(|e| CoreError::Mfa(e.to_string()))
 }
 
+/// Verify a TOTP code and, on success, return the matched time-step.
+///
+/// Only steps strictly newer than the caller's high-water mark are accepted
+/// (pass `last_step + 1` as `min_step`), so a single code cannot be replayed
+/// within its ±1-step skew window once it has been consumed. Returns `None`
+/// when the code does not match an allowed step.
+pub fn verify_totp_step(
+    secret_b32: &str,
+    code: &str,
+    issuer: &str,
+    account: &str,
+    min_step: u64,
+) -> Result<Option<u64>> {
+    const STEP: u64 = 30;
+    let t = totp(secret_b32, issuer, account)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| CoreError::Mfa(e.to_string()))?
+        .as_secs();
+    let current = now / STEP;
+    let candidate = code.trim();
+    // Check newest step first so the stored high-water mark advances maximally.
+    for cand in [current + 1, current, current.saturating_sub(1)] {
+        if cand < min_step {
+            continue;
+        }
+        let expected = t.generate(cand * STEP);
+        if crate::password::constant_time_eq(expected.as_bytes(), candidate.as_bytes()) {
+            return Ok(Some(cand));
+        }
+    }
+    Ok(None)
+}
+
 /// A generated recovery code plus the hash that should be persisted.
 pub struct RecoveryCode {
     pub plaintext: String,

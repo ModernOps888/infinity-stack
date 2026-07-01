@@ -26,9 +26,19 @@ pub struct RouteConfig {
     /// Require a valid Infinity ID access token.
     #[serde(default)]
     pub require_auth: bool,
-    /// Optional scope/permission the token must carry (e.g. `orders:read`).
+    /// Optional OAuth2 scope the token must carry (e.g. `orders:read`).
+    /// Matched only against token scopes — never against roles.
     #[serde(default)]
     pub required_scope: Option<String>,
+    /// Optional RBAC role the token must carry (e.g. `admin`). Kept separate
+    /// from `required_scope` so a user's roles cannot satisfy a scope check.
+    #[serde(default)]
+    pub required_role: Option<String>,
+    /// Optional expected audience (`aud`). When set, the token must have been
+    /// minted for this resource, preventing a token issued to another client
+    /// from being replayed against this upstream (confused-deputy).
+    #[serde(default)]
+    pub audience: Option<String>,
 }
 
 impl Default for EdgeConfig {

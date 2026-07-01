@@ -36,8 +36,9 @@ fn clear_session_cookie(secure: bool) -> &'static str {
     }
 }
 
-fn is_https(st: &SharedState) -> bool {
-    st.config.public_url.starts_with("https://")
+fn use_secure_cookie(st: &SharedState) -> bool {
+    let public_url = &st.config.public_url;
+    !(public_url.starts_with("http://localhost") || public_url.starts_with("http://127."))
 }
 
 fn cookie_from_headers(headers: &HeaderMap) -> Option<String> {
@@ -76,11 +77,11 @@ pub async fn login(
             return Err(ApiError::Unauthorized("invalid credentials".into()));
         }
     };
-    if user.disabled != 0 {
-        return Err(ApiError::Forbidden("account disabled".into()));
-    }
     if !observe_core::password::verify_password(&req.password, &user.password_hash)? {
         st.login_throttle.record_failure(&email);
+        return Err(ApiError::Unauthorized("invalid credentials".into()));
+    }
+    if user.disabled != 0 {
         return Err(ApiError::Unauthorized("invalid credentials".into()));
     }
     st.login_throttle.record_success(&email);
@@ -110,7 +111,7 @@ pub async fn login(
         HeaderValue::from_str(&session_cookie(
             &session,
             st.config.session_ttl_secs,
-            is_https(&st),
+            use_secure_cookie(&st),
         ))
         .map_err(|e| ApiError::Internal(e.to_string()))?,
     );
@@ -128,7 +129,7 @@ pub async fn logout(
     let mut resp = Json(json!({ "ok": true, "user_id": principal.user_id })).into_response();
     resp.headers_mut().insert(
         SET_COOKIE,
-        HeaderValue::from_static(clear_session_cookie(is_https(&st))),
+        HeaderValue::from_static(clear_session_cookie(use_secure_cookie(&st))),
     );
     Ok(resp)
 }

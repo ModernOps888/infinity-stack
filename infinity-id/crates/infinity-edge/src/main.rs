@@ -97,15 +97,20 @@ async fn proxy(
     let mut subject: Option<String> = None;
     if route.require_auth {
         let token = bearer(req.headers());
-        let claims = match token.and_then(|t| st.jwks.validate(&t)) {
+        let claims = match token.and_then(|t| st.jwks.validate(&t, route.audience.as_deref())) {
             Some(c) => c,
             None => return err(StatusCode::UNAUTHORIZED, "missing or invalid access token"),
         };
+        // Scopes and roles are checked against separate requirements so a
+        // user's roles can never satisfy a scope-gated route.
         if let Some(required) = &route.required_scope {
-            let has = claims.scope.split_whitespace().any(|s| s == required)
-                || claims.roles.iter().any(|r| r == required);
-            if !has {
+            if !claims.scope.split_whitespace().any(|s| s == required) {
                 return err(StatusCode::FORBIDDEN, "token lacks required scope");
+            }
+        }
+        if let Some(required) = &route.required_role {
+            if !claims.roles.iter().any(|r| r == required) {
+                return err(StatusCode::FORBIDDEN, "token lacks required role");
             }
         }
         subject = Some(claims.sub);

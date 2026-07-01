@@ -63,6 +63,7 @@ pub async fn delete_index(
     Path(name): Path<String>,
 ) -> ApiResult<Json<Value>> {
     p.require("search:delete")?;
+    validate_name(&name)?;
     store::delete_index(&st.db, &name).await?;
     st.indexes.write().await.remove(&name);
     Ok(Json(json!({"ok": true})))
@@ -75,6 +76,7 @@ pub async fn upsert_docs(
     Json(body): Json<Value>,
 ) -> ApiResult<Json<Value>> {
     p.require("search:write")?;
+    validate_name(&name)?;
     let docs = if let Some(arr) = body.as_array() {
         arr.clone()
     } else if let Some(arr) = body.get("docs").and_then(|v| v.as_array()) {
@@ -130,6 +132,7 @@ pub async fn query(
     Query(q): Query<SearchQuery>,
 ) -> ApiResult<Json<Value>> {
     p.require("search:query")?;
+    validate_name(&name)?;
     if q.q.len() > 512 {
         return Err(ApiError::BadRequest("query too long".into()));
     }

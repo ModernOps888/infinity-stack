@@ -76,7 +76,7 @@ Dashboard routes/views:
 
 ### Access control
 - Admin dashboard authentication with opaque server-side sessions.
-- `HttpOnly` + `SameSite=Strict` cookies; `Secure` is added when `OBSERVE_PUBLIC_URL` is `https://...`.
+- `HttpOnly` + `SameSite=Strict` cookies; `Secure` is set by default and omitted only for loopback (`http://localhost` / `http://127.*`) development.
 - RBAC guards on query, alert and key-management APIs.
 
 ---
@@ -89,11 +89,11 @@ Infinity Observe is hardened by default:
 |---|---|
 | **Password storage** | Argon2id (memory-hard OWASP parameters: 19 MiB, 2 passes). |
 | **First run** | If `OBSERVE_ADMIN_PASSWORD` is not set, a strong random admin password is generated and printed once in logs. |
-| **Sessions** | Opaque random token, hashed at rest, server-side expiration/revocation, `HttpOnly`, `SameSite=Strict`, optional `Secure`. |
+| **Sessions** | Opaque random token, hashed at rest, server-side expiration/revocation, `HttpOnly`, `SameSite=Strict`, `Secure` by default (omitted only for loopback dev). |
 | **RBAC** | Admin-only guards for alert mutation and ingest-key management; viewer role is read-only. |
 | **Ingest auth** | Logs/metrics/traces require `Authorization: Bearer <ingest-key>`; active key hashes are compared in constant time. |
 | **Brute force** | Per-account login lockout plus global per-IP fixed-window rate limiting. |
-| **User enumeration** | Uniform login errors and dummy Argon2id verification for unknown users. |
+| **User enumeration** | Uniform login errors and dummy Argon2id verification for unknown users; disabled-account status is checked only after password verification. |
 | **Transport hardening** | CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. |
 | **Error handling** | DB/internal errors are logged server-side and returned to clients as generic JSON. |
 | **SQL safety** | All queries use `sqlx` bind parameters; dynamic log search appends only fixed SQL fragments. |
@@ -101,7 +101,7 @@ Infinity Observe is hardened by default:
 | **Secret hygiene** | `.gitignore` excludes `data/`, `target/`, databases, keys, logs and `.env` files. |
 | **JWTs/JWKS** | Infinity Observe does not issue JWTs; ingest uses opaque API keys and the dashboard uses server-side sessions. |
 
-**TLS:** terminate HTTPS at a load balancer or reverse proxy and set `OBSERVE_PUBLIC_URL=https://observe.example.com` so session cookies include `Secure`.
+**TLS:** terminate HTTPS at a load balancer or reverse proxy. Session cookies are marked `Secure` by default for any non-loopback `OBSERVE_PUBLIC_URL`, so browsers only send them over HTTPS.
 
 ---
 

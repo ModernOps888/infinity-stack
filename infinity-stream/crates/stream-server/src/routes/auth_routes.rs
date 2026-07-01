@@ -28,6 +28,13 @@ fn session_cookie(token: &str, ttl: i64, secure: bool) -> String {
     }
 }
 
+/// Cookies get the `Secure` flag by default. It is only omitted for local
+/// development over plain HTTP on loopback, so a TLS-terminating proxy
+/// deployment never accidentally ships a cleartext-capable session cookie.
+fn cookie_secure(public_url: &str) -> bool {
+    !(public_url.starts_with("http://localhost") || public_url.starts_with("http://127."))
+}
+
 pub async fn login(
     State(st): State<SharedState>,
     Json(req): Json<LoginRequest>,
@@ -68,7 +75,7 @@ pub async fn login(
         HeaderValue::from_str(&session_cookie(
             &session,
             st.config.session_ttl_secs,
-            st.config.public_url.starts_with("https://"),
+            cookie_secure(&st.config.public_url),
         ))
         .map_err(|e| ApiError::Internal(e.to_string()))?,
     );

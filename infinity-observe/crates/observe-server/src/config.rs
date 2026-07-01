@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     /// Socket address to bind, e.g. `0.0.0.0:8090`.
     pub bind: String,
-    /// Public URL used to decide whether dashboard cookies should be `Secure`.
+    /// Public URL used to decide whether dashboard cookies may omit `Secure` for local development.
     pub public_url: String,
     pub database_url: String,
     pub data_dir: String,

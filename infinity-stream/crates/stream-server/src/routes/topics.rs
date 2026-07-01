@@ -103,6 +103,7 @@ pub async fn delete_topic(
     Path(name): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
     p.require("topics:delete")?;
+    validate_name(&name)?;
     store::delete_topic(&st.db, &name).await?;
     st.log.lock().await.delete_topic(&name)?;
     st.broadcasts.write().await.remove(&name);
@@ -116,6 +117,7 @@ pub async fn produce(
     Json(req): Json<ProduceRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
     p.require("topics:produce")?;
+    validate_name(&name)?;
     let topic = store::get_topic(&st.db, &name)
         .await?
         .ok_or_else(|| ApiError::NotFound("topic not found".into()))?;
@@ -188,6 +190,7 @@ pub async fn consume(
     Query(q): Query<ConsumeQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
     p.require("topics:consume")?;
+    validate_name(&name)?;
     let records = st
         .log
         .lock()
@@ -204,6 +207,7 @@ pub async fn commit(
     Json(req): Json<CommitRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
     p.require("topics:commit")?;
+    validate_name(&name)?;
     validate_group(&req.group)?;
     store::commit_offset(
         &st.db,
@@ -223,6 +227,7 @@ pub async fn offset(
     Query(q): Query<OffsetQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
     p.require("topics:consume")?;
+    validate_name(&name)?;
     validate_group(&q.group)?;
     let offset = store::get_offset(&st.db, &name, &q.group, q.partition as i64)
         .await?
@@ -247,6 +252,7 @@ pub async fn subscribe(
     ws: WebSocketUpgrade,
 ) -> ApiResult<impl axum::response::IntoResponse> {
     p.require("topics:subscribe")?;
+    validate_name(&name)?;
     let rx = st.topic_sender(&name).await.subscribe();
     Ok(ws.on_upgrade(move |socket| ws_loop(socket, rx)))
 }

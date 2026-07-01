@@ -55,12 +55,14 @@ pub async fn login(
             return Err(ApiError::Unauthorized("invalid credentials".into()));
         }
     };
-    if user.disabled != 0 {
-        return Err(ApiError::Forbidden("account disabled".into()));
-    }
     if !infinity_core::password::verify_password(&req.password, &user.password_hash)? {
         st.login_throttle.record_failure(&throttle_key);
         store::audit(&st.db, &user.id, "login.fail", None, None, None).await;
+        return Err(ApiError::Unauthorized("invalid credentials".into()));
+    }
+    // Disabled check only after successful password verification, and returns
+    // the same generic error — avoids a pre-auth account-status enumeration oracle.
+    if user.disabled != 0 {
         return Err(ApiError::Unauthorized("invalid credentials".into()));
     }
     if user.mfa_enabled != 0 {

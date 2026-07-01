@@ -318,6 +318,33 @@ async fn grant_refresh(st: &SharedState, p: TokenParams) -> ApiResult<Json<serde
     if chrono::DateTime::parse_from_rfc3339(&row.expires_at).map(|t| t < Utc::now()).unwrap_or(true) {
         return Err(ApiError::Unauthorized("refresh token expired".into()));
     }
+    // Authenticate the client the token was issued to (RFC 6749 §6). A presented
+    // client_id must match the token's client; registered confidential clients
+    // must also present a valid secret so a stolen refresh token alone cannot be
+    // redeemed. Public / first-party (unregistered) clients keep no secret.
+    if let Some(cid) = &p.client_id {
+        if cid != &row.client_id {
+            return Err(ApiError::Unauthorized(
+                "client_id does not match refresh token".into(),
+            ));
+        }
+    }
+    if let Some((client, secret_hash)) = store::get_client_raw(&st.db, &row.client_id).await? {
+        if !client.public {
+            let secret = p
+                .client_secret
+                .clone()
+                .ok_or_else(|| ApiError::Unauthorized("client authentication required".into()))?;
+            let stored = secret_hash
+                .ok_or_else(|| ApiError::Internal("confidential client missing secret".into()))?;
+            if !infinity_core::password::constant_time_eq(
+                sha256_hex(&secret).as_bytes(),
+                stored.as_bytes(),
+            ) {
+                return Err(ApiError::Unauthorized("invalid client credentials".into()));
+            }
+        }
+    }
     // Rotate: revoke the presented token and mint a fresh pair.
     store::revoke_refresh(&st.db, &hash).await?;
     let user = store::get_user_row(&st.db, &row.user_id)
@@ -415,9 +442,14 @@ pub async fn verify_second_factor(
         .mfa_secret
         .as_deref()
         .ok_or_else(|| ApiError::Internal("mfa enabled without secret".into()))?;
-    let ok = infinity_core::mfa::verify_totp(secret, otp, &st.config.mfa_issuer, &user.email)
-        .unwrap_or(false);
-    if ok {
+    // Enforce one-time use: only accept a TOTP step newer than the last one
+    // consumed, then advance the high-water mark so the code cannot be replayed.
+    let min_step = user.mfa_last_step.map(|s| s.saturating_add(1) as u64).unwrap_or(0);
+    if let Some(step) =
+        infinity_core::mfa::verify_totp_step(secret, otp, &st.config.mfa_issuer, &user.email, min_step)
+            .unwrap_or(None)
+    {
+        store::set_mfa_last_step(&st.db, &user.id, step as i64).await?;
         return Ok(());
     }
     // Fall back to recovery code.

@@ -1,6 +1,6 @@
 use axum::extract::{Path, State};
 use axum::Json;
-use data_core::rbac::ROLE_SUPERADMIN;
+use data_core::rbac::{self, ROLE_SUPERADMIN};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -47,11 +47,80 @@ fn user_json(u: &store::UserRow, roles: Vec<String>) -> serde_json::Value {
 }
 
 fn caller_is_superadmin(p: &Principal) -> bool {
-    p.roles.iter().any(|r| r == ROLE_SUPERADMIN)
+    p.roles.iter().any(|r| r == ROLE_SUPERADMIN) || rbac::any_permission(&p.permissions, "*:*")
 }
 
 fn role_change_allowed(p: &Principal, roles: &[String]) -> bool {
     !roles.iter().any(|r| r == ROLE_SUPERADMIN) || caller_is_superadmin(p)
+}
+
+fn permission_grant_allowed(p: &Principal, permissions: &[String]) -> bool {
+    caller_is_superadmin(p)
+        || permissions
+            .iter()
+            .all(|permission| rbac::any_permission(&p.permissions, permission))
+}
+
+/// A caller may only assign roles whose full permission set they already hold.
+/// This mirrors `permission_grant_allowed` for the role-*assignment* paths so a
+/// `users:write` holder cannot escalate by attaching a more privileged role
+/// (e.g. `admin`) to themselves or another account.
+async fn assigned_roles_allowed(
+    st: &SharedState,
+    principal: &Principal,
+    roles: &[String],
+) -> Result<(), ApiError> {
+    if caller_is_superadmin(principal) {
+        return Ok(());
+    }
+    let mut granted = Vec::new();
+    for role in roles {
+        granted.extend(store::role_permissions(&st.db, role).await?);
+    }
+    if permission_grant_allowed(principal, &granted) {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden(
+            "cannot assign a role that grants permissions you do not hold".into(),
+        ))
+    }
+}
+
+fn valid_email(email: &str) -> bool {
+    if email.is_empty()
+        || email.len() > 254
+        || !email.is_ascii()
+        || email.contains(char::is_whitespace)
+    {
+        return false;
+    }
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    if local.is_empty()
+        || local.len() > 64
+        || domain.is_empty()
+        || domain.len() > 253
+        || domain.starts_with('.')
+        || domain.ends_with('.')
+        || !domain.contains('.')
+        || email.matches('@').count() != 1
+    {
+        return false;
+    }
+    let local_valid = local
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'%' | b'+' | b'-'));
+    let domain_valid = domain.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    });
+    local_valid && domain_valid
 }
 
 pub async fn list_users(
@@ -75,7 +144,7 @@ pub async fn create_user(
     principal.require("users:write")?;
     let email = req.email.trim().to_ascii_lowercase();
     let username = req.username.trim();
-    if !email.contains('@') || email.len() > 254 {
+    if !valid_email(&email) {
         return Err(ApiError::BadRequest("valid email required".into()));
     }
     if !valid_name(username) {
@@ -88,6 +157,12 @@ pub async fn create_user(
             "only superadmin may grant superadmin".into(),
         ));
     }
+    let roles = if req.roles.is_empty() {
+        vec![data_core::rbac::ROLE_USER.to_string()]
+    } else {
+        req.roles.clone()
+    };
+    assigned_roles_allowed(&st, &principal, &roles).await?;
     let user = store::create_user(
         &st.db,
         &email,
@@ -96,11 +171,6 @@ pub async fn create_user(
         &req.password,
     )
     .await?;
-    let roles = if req.roles.is_empty() {
-        vec![data_core::rbac::ROLE_USER.to_string()]
-    } else {
-        req.roles
-    };
     store::set_user_roles(&st.db, &user.id, &roles).await?;
     store::audit(
         &st.db,
@@ -134,11 +204,18 @@ pub async fn update_user(
         store::set_user_disabled(&st.db, &id, disabled).await?;
     }
     if let Some(roles) = req.roles {
+        let current_roles = store::user_roles(&st.db, &id).await?;
+        if current_roles.iter().any(|r| r == ROLE_SUPERADMIN) && !caller_is_superadmin(&principal) {
+            return Err(ApiError::Forbidden(
+                "only superadmin may modify superadmin roles".into(),
+            ));
+        }
         if !role_change_allowed(&principal, &roles) {
             return Err(ApiError::Forbidden(
                 "only superadmin may grant superadmin".into(),
             ));
         }
+        assigned_roles_allowed(&st, &principal, &roles).await?;
         store::set_user_roles(&st.db, &id, &roles).await?;
     }
     store::audit(
@@ -206,9 +283,9 @@ pub async fn upsert_role(
             "role name must be 1-64 characters: letters, numbers, '_' or '-'".into(),
         ));
     }
-    if req.permissions.iter().any(|p| p == "*:*") && !caller_is_superadmin(&principal) {
+    if !permission_grant_allowed(&principal, &req.permissions) {
         return Err(ApiError::Forbidden(
-            "only superadmin may grant wildcard permissions".into(),
+            "cannot grant permissions caller does not hold".into(),
         ));
     }
     if req.permissions.len() > 256 {

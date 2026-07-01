@@ -57,8 +57,11 @@ An embedded dark-theme admin console — no separate frontend to deploy.
 |---|---|
 | Passwords | Argon2id (memory-hard) |
 | API keys | Stored hashed, **constant-time** comparison |
-| Sessions | `HttpOnly` + `SameSite=Strict` cookies, server-side revocation |
+| Sessions | `HttpOnly` + `SameSite=Strict` cookies (+ `Secure` by default off loopback), server-side revocation |
 | Access control | RBAC guard on admin + write paths; no unauthenticated data access |
+| Privilege escalation | Callers may only assign roles / grant permissions they already hold; the built-in `superadmin` role is protected from non-superadmins |
+| Account enumeration | Uniform login errors; disabled-account status checked only **after** password verification |
+| Output encoding | Dashboard escapes all server-derived values before rendering (XSS) |
 | Abuse | Per-account login lockout + global per-IP rate limiting |
 | Transport | CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` |
 | Errors | Generic client responses; internal errors logged server-side only |

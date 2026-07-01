@@ -29,10 +29,13 @@ impl JwksCache {
     }
 
     /// Validate a token against any known key; returns claims on success.
-    pub fn validate(&self, token: &str) -> Option<Claims> {
+    ///
+    /// When `audience` is `Some`, the token's `aud` must match — this stops a
+    /// token minted for one relying party from being replayed at another.
+    pub fn validate(&self, token: &str, audience: Option<&str>) -> Option<Claims> {
         for key in &self.keys {
             if let Ok(claims) =
-                validate_with_components(token, &key.n, &key.e, &self.issuer, None)
+                validate_with_components(token, &key.n, &key.e, &self.issuer, audience)
             {
                 let _ = &key.kid;
                 // Only genuine access tokens may authorize upstream calls —

@@ -8,6 +8,23 @@ use crate::util::sha256_hex;
 
 pub const SESSION_COOKIE: &str = "infinity_session";
 
+/// Least-privilege permission set granted to API keys. Data-plane only —
+/// keys can produce/consume/search and create topics/indexes, but CANNOT
+/// delete topics/indexes or manage API keys / admin. A leaked key therefore
+/// cannot escalate to full administration (dashboard sessions remain admin).
+const API_KEY_SCOPE: &[&str] = &[
+    "topics:read",
+    "topics:produce",
+    "topics:consume",
+    "topics:commit",
+    "topics:subscribe",
+    "topics:create",
+    "search:read",
+    "search:query",
+    "search:write",
+    "search:create",
+];
+
 #[derive(Debug, Clone)]
 pub enum PrincipalKind {
     User,
@@ -63,7 +80,7 @@ impl FromRequestParts<SharedState> for Principal {
                     return Ok(Principal {
                         subject: id,
                         kind: PrincipalKind::ApiKey,
-                        permissions: vec!["*:*".into()],
+                        permissions: API_KEY_SCOPE.iter().map(|s| s.to_string()).collect(),
                     });
                 }
             }

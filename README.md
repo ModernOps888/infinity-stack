@@ -13,16 +13,18 @@ Predictable performance. Memory safety. No GC pauses. Self-hostable. No per-seat
 
 ---
 
-Rust's memory safety, C-like performance, and lack of garbage collection (predictable tail latency) make it the ideal tool to commoditize expensive cloud infrastructure. Infinity Stack targets four heavily-monopolized verticals — starting with a production-grade **identity provider**.
+Rust's memory safety, C-like performance, and lack of garbage collection (predictable tail latency) make it the ideal tool to commoditize expensive cloud infrastructure. Infinity Stack spans four heavily-monopolized verticals — **identity, observability, data, and streaming** — each a self-hostable, security-hardened Rust service with an embedded admin dashboard.
 
 ## The products
 
 | Product | Replaces | Status |
 |---|---|---|
 | **[∞ Infinity ID](./infinity-id/)** | Auth0 · Okta · OneLogin · Clerk | 🟢 **Flagship — runnable, hardened** |
-| [Infinity Observe](./infinity-observe/) | Datadog · Splunk · New Relic · Sentry | 🟡 Scaffold / roadmap |
-| [Infinity Data](./infinity-data/) | Snowflake · Databricks · Pinecone | 🟡 Scaffold / roadmap |
-| [Infinity Stream](./infinity-stream/) | Kafka/Confluent · Elasticsearch · Algolia | 🟡 Scaffold / roadmap |
+| [Infinity Observe](./infinity-observe/) | Datadog · Splunk · New Relic · Sentry | 🟢 Runnable · hardened (alpha) |
+| [Infinity Data](./infinity-data/) | Snowflake · Databricks · Pinecone | 🟢 Runnable · hardened (alpha) |
+| [Infinity Stream](./infinity-stream/) | Kafka/Confluent · Elasticsearch · Algolia | 🟢 Runnable · hardened (alpha) |
+
+Every service ships hardened by default — Argon2id password storage, opaque server-side sessions with `HttpOnly`/`SameSite=Strict` (+ `Secure`) cookies, RBAC, per-account lockout + per-IP rate limiting, hardened HTTP security headers, and fully parameterized SQL. Each tool has passed automated security review with findings remediated and verified.
 
 ---
 
@@ -53,10 +55,10 @@ INFINITY_ADMIN_PASSWORD='ChooseAStrongOne#2025' cargo run --bin infinity-id
 
 ```
 infinity-stack/
-├─ infinity-id/         # ← deep build (identity + edge gateway + dashboard)
-├─ infinity-observe/    # observability (stub)
-├─ infinity-data/       # analytics + vector DB (stub)
-└─ infinity-stream/     # streaming + search (stub)
+├─ infinity-id/         # identity + OAuth2/OIDC + edge gateway + dashboard (flagship)
+├─ infinity-observe/    # observability — logs, metrics, traces, alerts + dashboard
+├─ infinity-data/       # vector DB + analytics tables + dashboard
+└─ infinity-stream/     # durable topics + BM25 search + dashboard
 ```
 
 ## License

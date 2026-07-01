@@ -86,21 +86,22 @@ Infinity ID is built to withstand scrutiny from a security professional. Highlig
 | **Password storage** | Argon2id (memory-hard, OWASP params: 19 MiB, 2 passes) |
 | **Token signing** | RS256 with persisted key; public JWKS; algorithm pinned on validation (no `alg=none`/HS confusion) |
 | **PKCE** | Required for public clients; **only S256 accepted** (`plain` refused) |
-| **Client auth** | Confidential clients authenticated at the token endpoint with **constant-time** secret comparison |
-| **Auth codes** | Single-use, short-TTL, `redirect_uri` exact-match, bound to `client_id` |
-| **Refresh tokens** | Rotated on use; **reuse detection revokes the whole token family** |
+| **Client auth** | Confidential clients authenticated with **constant-time** secret comparison at the token endpoint **and on refresh** (RFC 6749 §6) |
+| **Auth codes** | Single-use (atomic `DELETE … RETURNING`, no redemption race), short-TTL, `redirect_uri` exact-match, bound to `client_id` |
+| **Refresh tokens** | Rotated on use; **reuse detection revokes the whole token family**; confidential-client secret required to redeem |
+| **MFA (TOTP)** | RFC 6238; codes are **one-time-use** — an accepted time-step is recorded and older/replayed codes are rejected within the skew window; recovery codes are single-use |
 | **Scopes** | Requested scopes are **narrowed to the client's registration** — no self-asserted privileged scopes |
-| **Token audience** | Management API requires a **first-party** token (audience = issuer) — third-party RP tokens can't be replayed against `/admin/*` |
+| **Token audience** | Management API requires a **first-party** token (audience = issuer) — third-party RP tokens can't be replayed against `/admin/*`. The edge can pin a per-route `audience` so a token minted for another client is rejected |
 | **Token type** | `id_token`s are rejected wherever an access token is expected (server **and** edge) |
-| **Sessions** | Opaque, hashed at rest, `HttpOnly` + `SameSite=Strict` (+ `Secure` on HTTPS), **server-side revocation on logout** |
+| **Sessions** | Opaque, hashed at rest, `HttpOnly` + `SameSite=Strict` (+ `Secure` by default off loopback), **server-side revocation on logout** |
 | **Brute force** | Per-account lockout + global per-IP rate limit (Argon2 makes floods expensive, so this matters) |
-| **User enumeration** | Uniform errors + timing equalization for unknown accounts |
+| **User enumeration** | Uniform errors + timing equalization; disabled-account status is only checked **after** password verification |
 | **Transport hardening** | CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | **Error handling** | Internal/DB errors are logged server-side and returned to clients as generic messages |
-| **Edge** | Strips client-supplied identity headers; injects a verified `X-Infinity-Sub` |
+| **Edge** | Validates token audience; matches `required_scope` against scopes and `required_role` against roles **separately** (roles never satisfy a scope check); strips client-supplied identity headers and injects a verified `X-Infinity-Sub` |
 | **First run** | If no admin password is provided, a strong random one is generated and shown once in the logs |
 
-> This codebase passed an automated security review; all findings (scope self-assertion, audience confusion, role-escalation, edge token-type) were remediated and verified.
+> This codebase passed two rounds of automated security review. Findings from the first round (scope self-assertion, audience confusion, role-escalation, edge token-type) and the second (TOTP code replay, refresh-token client authentication, auth-code redemption race, edge audience/role–scope separation) were all remediated and verified.
 
 **TLS:** terminate HTTPS at Infinity Edge or a load balancer; set `issuer = https://…` so cookies become `Secure`.
 
@@ -253,7 +254,9 @@ cargo run --bin infinity-edge
 prefix = "/api"
 upstream = "http://127.0.0.1:8081"
 require_auth = true
-required_scope = "api:access"
+required_scope = "api:access"   # matched against token scopes only
+# required_role = "admin"       # optional: matched against token roles only
+# audience = "api.example.com"  # optional: reject tokens minted for another client
 ```
 
 ---

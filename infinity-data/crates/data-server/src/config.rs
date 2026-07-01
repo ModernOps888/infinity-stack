@@ -54,7 +54,8 @@ impl Config {
     }
 
     pub fn secure_cookies(&self) -> bool {
-        self.public_url.starts_with("https://")
+        !(self.public_url.starts_with("http://localhost")
+            || self.public_url.starts_with("http://127."))
     }
 }
 

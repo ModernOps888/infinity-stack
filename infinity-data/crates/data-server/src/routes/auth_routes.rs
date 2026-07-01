@@ -28,8 +28,13 @@ fn session_cookie(token: &str, ttl: i64, secure: bool) -> String {
     }
 }
 
-fn clear_cookie() -> &'static str {
-    "infinity_data_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"
+fn clear_cookie(secure: bool) -> String {
+    let base = format!("{SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0");
+    if secure {
+        format!("{base}; Secure")
+    } else {
+        base
+    }
 }
 
 pub async fn login(
@@ -61,10 +66,21 @@ pub async fn login(
         .await;
         return Err(ApiError::Unauthorized("invalid credentials".into()));
     };
-    if user.disabled != 0 {
-        return Err(ApiError::Forbidden("account disabled".into()));
-    }
     if !data_core::password::verify_password(&req.password, &user.password_hash)? {
+        st.login_throttle.record_failure(&email);
+        store::audit(
+            &st.db,
+            Some(&user.id),
+            "login.fail",
+            Some("user"),
+            None,
+            None,
+            None,
+        )
+        .await;
+        return Err(ApiError::Unauthorized("invalid credentials".into()));
+    }
+    if user.disabled != 0 {
         st.login_throttle.record_failure(&email);
         store::audit(
             &st.db,
@@ -142,8 +158,11 @@ pub async fn logout(
     )
     .await;
     let mut resp = Json(json!({"ok": true})).into_response();
-    resp.headers_mut()
-        .insert(SET_COOKIE, HeaderValue::from_static(clear_cookie()));
+    resp.headers_mut().insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&clear_cookie(st.config.secure_cookies()))
+            .map_err(|e| ApiError::Internal(e.to_string()))?,
+    );
     Ok(resp)
 }
 

@@ -41,6 +41,8 @@ pub struct UserRow {
     pub mfa_secret: Option<String>,
     pub disabled: i64,
     pub created_at: String,
+    #[sqlx(default)]
+    pub mfa_last_step: Option<i64>,
 }
 
 #[derive(FromRow)]
@@ -246,11 +248,21 @@ pub async fn enable_mfa(db: &SqlitePool, id: &str) -> sqlx::Result<()> {
 }
 
 pub async fn disable_mfa(db: &SqlitePool, id: &str) -> sqlx::Result<()> {
-    sqlx::query("UPDATE users SET mfa_enabled = 0, mfa_secret = NULL WHERE id = ?")
+    sqlx::query("UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, mfa_last_step = NULL WHERE id = ?")
         .bind(id)
         .execute(db)
         .await?;
     sqlx::query("DELETE FROM recovery_codes WHERE user_id = ?")
+        .bind(id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+/// Record the highest TOTP time-step accepted for a user (one-time-use guard).
+pub async fn set_mfa_last_step(db: &SqlitePool, id: &str, step: i64) -> sqlx::Result<()> {
+    sqlx::query("UPDATE users SET mfa_last_step = ? WHERE id = ?")
+        .bind(step)
         .bind(id)
         .execute(db)
         .await?;
@@ -436,16 +448,14 @@ pub async fn insert_auth_code(
 }
 
 /// Fetch and delete an authorization code atomically (single-use).
+///
+/// Uses a single `DELETE ... RETURNING` so two concurrent redemptions of the
+/// same code cannot both observe the row before it is removed (TOCTOU replay).
 pub async fn take_auth_code(db: &SqlitePool, code: &str) -> sqlx::Result<Option<AuthCodeRow>> {
-    let row = sqlx::query_as::<_, AuthCodeRow>("SELECT * FROM auth_codes WHERE code = ?")
+    sqlx::query_as::<_, AuthCodeRow>("DELETE FROM auth_codes WHERE code = ? RETURNING *")
         .bind(code)
         .fetch_optional(db)
-        .await?;
-    sqlx::query("DELETE FROM auth_codes WHERE code = ?")
-        .bind(code)
-        .execute(db)
-        .await?;
-    Ok(row)
+        .await
 }
 
 // ---------------------------------------------------------------------------
