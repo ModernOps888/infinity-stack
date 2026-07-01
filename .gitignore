@@ -1,0 +1,16 @@
+# Build artifacts
+/target
+**/target
+
+# Runtime data (SQLite DB + persisted signing key) — never commit
+/data
+**/data
+*.db
+*.db-*
+signing_key.pem
+
+# Logs
+*.log
+
+# Env
+.env

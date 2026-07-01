@@ -1,0 +1,37 @@
+services:
+  infinity-id:
+    build: .
+    image: infinity-stack/infinity-id:0.1.0
+    command: ["infinity-id"]
+    ports:
+      - "8080:8080"
+    environment:
+      INFINITY_BIND: "0.0.0.0:8080"
+      INFINITY_ISSUER: "http://localhost:8080"
+      # Set a strong password; if omitted a random one is generated & logged.
+      INFINITY_ADMIN_EMAIL: "admin@infinity.local"
+      INFINITY_ADMIN_PASSWORD: "${INFINITY_ADMIN_PASSWORD:-}"
+      RUST_LOG: "info,sqlx=warn"
+    volumes:
+      - infinity-data:/data
+    restart: unless-stopped
+
+  infinity-edge:
+    image: infinity-stack/infinity-id:0.1.0
+    command: ["infinity-edge"]
+    depends_on:
+      - infinity-id
+    ports:
+      - "9000:9000"
+    environment:
+      EDGE_BIND: "0.0.0.0:9000"
+      EDGE_ISSUER: "http://localhost:8080"
+      EDGE_JWKS_URL: "http://infinity-id:8080/.well-known/jwks.json"
+      EDGE_RATE_LIMIT_PER_MIN: "600"
+    # Mount an Edge.toml to declare upstream routes:
+    # volumes:
+    #   - ./Edge.toml:/app/Edge.toml:ro
+    restart: unless-stopped
+
+volumes:
+  infinity-data:

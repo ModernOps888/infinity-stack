@@ -1,0 +1,37 @@
+# Infinity ID configuration (copy to `Config.toml` and edit).
+# Every value can also be supplied via environment variables using the
+# `INFINITY_` prefix, e.g. INFINITY_BIND, INFINITY_ADMIN_PASSWORD.
+
+# Address the server listens on.
+bind = "0.0.0.0:8080"
+
+# Public, externally-reachable issuer URL. MUST match what clients use.
+# Use https:// in production so session cookies get the Secure flag.
+issuer = "http://localhost:8080"
+
+# Database connection string. SQLite by default (zero-dependency, local).
+database_url = "sqlite://data/infinity.db"
+
+# Directory for the persisted RSA signing key and SQLite file.
+data_dir = "data"
+
+# Token lifetimes (seconds).
+access_token_ttl_secs = 3600          # 1 hour
+refresh_token_ttl_secs = 2592000      # 30 days
+code_ttl_secs = 300                   # 5 minutes
+session_ttl_secs = 28800              # 8 hours
+
+# Seed admin account (created on first run only).
+# Leave admin_password unset / as the placeholder and Infinity ID will
+# generate a strong random password and print it once in the logs.
+admin_email = "admin@infinity.local"
+admin_password = "ChangeMe_Infinity#2025"
+
+# Global per-IP request cap per 60s window (0 disables).
+global_rate_limit_per_min = 600
+
+# Display name shown in authenticator apps (no colons allowed).
+mfa_issuer = "Infinity ID"
+
+# Allowed CORS origins for browser SPAs / the dashboard.
+cors_origins = ["http://localhost:8080"]

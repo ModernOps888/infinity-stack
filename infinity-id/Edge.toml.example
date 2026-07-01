@@ -1,0 +1,28 @@
+# Infinity Edge gateway configuration (copy to `Edge.toml`).
+# Values can also be set via EDGE_* environment variables.
+
+# Address the gateway listens on.
+bind = "0.0.0.0:9000"
+
+# Must match the Infinity ID issuer.
+issuer = "http://localhost:8080"
+
+# Where to fetch the signing keys used to validate access tokens.
+jwks_url = "http://localhost:8080/.well-known/jwks.json"
+
+# Max requests per client IP per 60s window (0 = unlimited).
+rate_limit_per_min = 600
+
+# Reverse-proxy routes, matched by longest path prefix.
+
+[[routes]]
+prefix = "/api/public"
+upstream = "http://127.0.0.1:8081"
+require_auth = false
+
+[[routes]]
+prefix = "/api"
+upstream = "http://127.0.0.1:8081"
+require_auth = true
+# Optional: token must carry this scope or role.
+required_scope = "api:access"

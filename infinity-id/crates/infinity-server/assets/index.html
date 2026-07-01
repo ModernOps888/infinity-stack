@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Infinity ID — Admin Console</title>
+  <meta name="description" content="Infinity ID — secure-by-design identity provider. OIDC/OAuth2, MFA, RBAC in Rust." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Login view -->
+  <div id="login-view" class="login-wrap hidden">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <div class="brand-lg"><span class="infinity">∞</span> Infinity&nbsp;ID</div>
+      <p class="muted">Secure-by-design identity, in Rust.</p>
+      <label>Email</label>
+      <input id="login-email" type="email" required placeholder="admin@infinity.local" />
+      <label>Password</label>
+      <input id="login-password" type="password" required placeholder="••••••••" />
+      <label>MFA code <span class="muted">(if enabled)</span></label>
+      <input id="login-otp" type="text" inputmode="numeric" placeholder="123456" />
+      <button type="submit" class="btn primary full">Sign in</button>
+      <div id="login-error" class="error"></div>
+    </form>
+    <div class="login-footer muted">Infinity Stack · Open source · Apache-2.0</div>
+  </div>
+
+  <!-- App shell -->
+  <div id="app-view" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="infinity">∞</span> Infinity ID</div>
+      <nav>
+        <a class="nav-item active" data-view="overview">Overview</a>
+        <a class="nav-item" data-view="users">Users</a>
+        <a class="nav-item" data-view="clients">Applications</a>
+        <a class="nav-item" data-view="roles">Roles</a>
+        <a class="nav-item" data-view="audit">Audit log</a>
+        <a class="nav-item" data-view="security">My security</a>
+      </nav>
+      <div class="sidebar-foot">
+        <div id="who" class="who"></div>
+        <button id="logout" class="btn ghost sm">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <h1 id="view-title">Overview</h1>
+        <div id="toast" class="toast"></div>
+      </header>
+      <section id="view-root" class="view-root"></section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
