@@ -1,12 +1,14 @@
-﻿//! Infinity Stream — streaming log + BM25 search + realtime fan-out in one Rust binary.
+//! Infinity Stream — streaming log + BM25 search + realtime fan-out in one Rust binary.
 
 mod assets;
 mod auth;
 mod config;
 mod error;
+mod ratelimit;
 mod routes;
 mod state;
 mod store;
+mod throttle;
 mod util;
 
 use std::collections::{HashMap, VecDeque};
@@ -15,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use stream_core::bm25::Bm25Index;
@@ -40,19 +43,31 @@ async fn main() -> anyhow::Result<()> {
     let opts = SqliteConnectOptions::from_str(&config.database_url)
         .context("parsing database_url")?
         .create_if_missing(true);
-    let db = SqlitePoolOptions::new().max_connections(10).connect_with(opts).await.context("connecting to database")?;
-    sqlx::migrate!("./migrations").run(&db).await.context("running migrations")?;
+    let db = SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect_with(opts)
+        .await
+        .context("connecting to database")?;
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .context("running migrations")?;
 
-    if let Some(key) = store::seed(&db, &config).await.context("seeding database")? {
+    if let Some(key) = store::seed(&db, &config)
+        .await
+        .context("seeding database")?
+    {
         tracing::warn!("seeded initial API key (shown once): {}", key);
     }
 
-    let log = CommitLog::open(&config.data_dir, config.segment_max_bytes).context("opening commit log")?;
+    let log = CommitLog::open(&config.data_dir, config.segment_max_bytes)
+        .context("opening commit log")?;
     let mut indexes: HashMap<String, Bm25Index> = HashMap::new();
     for (name, _) in store::list_indexes(&db).await.context("loading indexes")? {
         let mut idx = Bm25Index::new();
         for (id, fields_json) in store::docs_for_index(&db, &name).await? {
-            let fields: HashMap<String, serde_json::Value> = serde_json::from_str(&fields_json).unwrap_or_default();
+            let fields: HashMap<String, serde_json::Value> =
+                serde_json::from_str(&fields_json).unwrap_or_default();
             idx.index(id, fields);
         }
         indexes.insert(name, idx);
@@ -60,6 +75,8 @@ async fn main() -> anyhow::Result<()> {
 
     let bind = config.bind.clone();
     let cors = build_cors(&config);
+    let body_limit = config.max_json_body_bytes;
+    let ip_limiter = ratelimit::IpRateLimiter::new(config.global_rate_limit_per_min);
     let state = Arc::new(AppState {
         db,
         config,
@@ -67,9 +84,12 @@ async fn main() -> anyhow::Result<()> {
         indexes: tokio::sync::RwLock::new(indexes),
         broadcasts: tokio::sync::RwLock::new(HashMap::new()),
         produced_times: tokio::sync::Mutex::new(VecDeque::new()),
+        login_throttle: throttle::LoginThrottle::default(),
+        ip_limiter,
     });
 
     let app = routes::router(state)
+        .layer(DefaultBodyLimit::max(body_limit))
         .layer(cors)
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
@@ -79,19 +99,37 @@ async fn main() -> anyhow::Result<()> {
         .layer(SetResponseHeaderLayer::overriding(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")))
         .layer(SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
         .layer(SetResponseHeaderLayer::overriding(HeaderName::from_static("permissions-policy"), HeaderValue::from_static("geolocation=(), microphone=(), camera=()")))
+        .layer(SetResponseHeaderLayer::overriding(header::STRICT_TRANSPORT_SECURITY, HeaderValue::from_static("max-age=63072000; includeSubDomains")))
         .layer(TraceLayer::new_for_http());
 
-    let listener = tokio::net::TcpListener::bind(&bind).await.with_context(|| format!("binding {bind}"))?;
+    let listener = tokio::net::TcpListener::bind(&bind)
+        .await
+        .with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "Infinity Stream listening — dashboard at the bind address");
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.context("server error")?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .context("server error")?;
     Ok(())
 }
 
 fn build_cors(config: &Config) -> CorsLayer {
-    let origins: Vec<HeaderValue> = config.cors_origins.iter().filter_map(|o| HeaderValue::from_str(o).ok()).collect();
+    let origins: Vec<HeaderValue> = config
+        .cors_origins
+        .iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
     CorsLayer::new()
         .allow_origin(origins)
-        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::PUT,
+            Method::DELETE,
+        ])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
         .allow_credentials(true)
 }

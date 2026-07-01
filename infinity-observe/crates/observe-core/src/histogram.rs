@@ -41,7 +41,11 @@ impl Exp2Histogram {
     pub fn buckets(&self) -> Vec<HistogramBucket> {
         let mut out = Vec::new();
         if self.zero_count > 0 {
-            out.push(HistogramBucket { lower: 0.0, upper: 0.0, count: self.zero_count });
+            out.push(HistogramBucket {
+                lower: 0.0,
+                upper: 0.0,
+                count: self.zero_count,
+            });
         }
         out.extend(self.buckets.iter().map(|(idx, count)| HistogramBucket {
             lower: 2f64.powi(*idx),
@@ -64,9 +68,17 @@ mod tests {
         }
         assert_eq!(h.total_count(), 10);
         let buckets = h.buckets();
-        assert!(buckets.iter().any(|b| b.lower == 0.0 && b.upper == 0.0 && b.count == 1));
-        assert!(buckets.iter().any(|b| b.lower == 1.0 && b.upper == 2.0 && b.count == 2));
-        assert!(buckets.iter().any(|b| b.lower == 2.0 && b.upper == 4.0 && b.count == 2));
-        assert!(buckets.iter().any(|b| b.lower == 8.0 && b.upper == 16.0 && b.count == 2));
+        assert!(buckets
+            .iter()
+            .any(|b| b.lower == 0.0 && b.upper == 0.0 && b.count == 1));
+        assert!(buckets
+            .iter()
+            .any(|b| b.lower == 1.0 && b.upper == 2.0 && b.count == 2));
+        assert!(buckets
+            .iter()
+            .any(|b| b.lower == 2.0 && b.upper == 4.0 && b.count == 2));
+        assert!(buckets
+            .iter()
+            .any(|b| b.lower == 8.0 && b.upper == 16.0 && b.count == 2));
     }
 }

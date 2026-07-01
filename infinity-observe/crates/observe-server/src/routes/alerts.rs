@@ -22,7 +22,10 @@ pub struct AlertParams {
     pub limit: Option<i64>,
 }
 
-pub async fn rules(State(st): State<SharedState>, principal: Principal) -> ApiResult<Json<serde_json::Value>> {
+pub async fn rules(
+    State(st): State<SharedState>,
+    principal: Principal,
+) -> ApiResult<Json<serde_json::Value>> {
     principal.require("alerts:read")?;
     let rules = store::list_alert_rules(&st.db).await?;
     Ok(Json(json!({ "rules": rules })))
@@ -35,19 +38,26 @@ pub async fn create_rule(
 ) -> ApiResult<Json<serde_json::Value>> {
     principal.require("alerts:create")?;
     if !matches!(req.kind.as_str(), "error_log_count" | "metric_p99") {
-        return Err(ApiError::BadRequest("kind must be error_log_count or metric_p99".into()));
+        return Err(ApiError::BadRequest(
+            "kind must be error_log_count or metric_p99".into(),
+        ));
     }
-    if req.name.trim().is_empty() || !req.threshold.is_finite() {
-        return Err(ApiError::BadRequest("name and finite threshold are required".into()));
+    let name = req.name.trim();
+    let target = req.target.trim();
+    if name.is_empty() || name.len() > 120 || target.len() > 160 || !req.threshold.is_finite() {
+        return Err(ApiError::BadRequest(
+            "valid name, target and finite threshold are required".into(),
+        ));
     }
     let rule = store::create_alert_rule(
         &st.db,
-        &req.name,
+        name,
         &req.kind,
-        &req.target,
+        target,
         req.threshold,
         req.window_secs.unwrap_or(300),
-    ).await?;
+    )
+    .await?;
     Ok(Json(json!({ "rule": rule })))
 }
 

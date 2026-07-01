@@ -1,0 +1,11 @@
+target/
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.log
+.env
+Config.toml

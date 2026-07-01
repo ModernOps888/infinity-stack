@@ -38,9 +38,14 @@ async fn main() -> anyhow::Result<()> {
 
 fn client(key: &str) -> anyhow::Result<reqwest::Client> {
     let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {key}"))?);
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {key}"))?,
+    );
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    Ok(reqwest::Client::builder().default_headers(headers).build()?)
+    Ok(reqwest::Client::builder()
+        .default_headers(headers)
+        .build()?)
 }
 
 async fn tail_file(client: &reqwest::Client, cfg: &AgentConfig, path: &str) -> anyhow::Result<()> {
@@ -68,7 +73,9 @@ async fn tail_file(client: &reqwest::Client, cfg: &AgentConfig, path: &str) -> a
         if !lines.is_empty() {
             post(client, &cfg.server_url, "/v1/logs", lines).await?;
         }
-        if cfg.once { break; }
+        if cfg.once {
+            break;
+        }
         sleep(Duration::from_secs(cfg.interval_secs.max(1))).await;
     }
     Ok(())
@@ -88,31 +95,50 @@ async fn generate_samples(client: &reqwest::Client, cfg: &AgentConfig) -> anyhow
             "message": if error { "request failed with upstream timeout" } else { "request completed" },
             "attributes": { "agent": "infinity-observe-agent" }
         })]).await?;
-        post(client, &cfg.server_url, "/v1/metrics", vec![json!({
-            "timestamp": Utc::now().to_rfc3339(),
-            "name": "http.server.duration_ms",
-            "value": latency,
-            "tags": { "service": cfg.service }
-        })]).await?;
+        post(
+            client,
+            &cfg.server_url,
+            "/v1/metrics",
+            vec![json!({
+                "timestamp": Utc::now().to_rfc3339(),
+                "name": "http.server.duration_ms",
+                "value": latency,
+                "tags": { "service": cfg.service }
+            })],
+        )
+        .await?;
         let trace_id = Uuid::new_v4().simple().to_string();
         let root_span = Uuid::new_v4().simple().to_string();
-        post(client, &cfg.server_url, "/v1/traces", vec![json!({
-            "trace_id": trace_id,
-            "span_id": root_span,
-            "name": "GET /api/demo",
-            "service": cfg.service,
-            "start": Utc::now().to_rfc3339(),
-            "duration_ms": latency,
-            "status": if error { "ERROR" } else { "OK" }
-        })]).await?;
+        post(
+            client,
+            &cfg.server_url,
+            "/v1/traces",
+            vec![json!({
+                "trace_id": trace_id,
+                "span_id": root_span,
+                "name": "GET /api/demo",
+                "service": cfg.service,
+                "start": Utc::now().to_rfc3339(),
+                "duration_ms": latency,
+                "status": if error { "ERROR" } else { "OK" }
+            })],
+        )
+        .await?;
         tracing::info!(latency_ms = latency, error, "shipped sample telemetry");
-        if cfg.once { break; }
+        if cfg.once {
+            break;
+        }
         sleep(Duration::from_secs(cfg.interval_secs.max(1))).await;
     }
     Ok(())
 }
 
-async fn post(client: &reqwest::Client, base: &str, path: &str, body: Vec<serde_json::Value>) -> anyhow::Result<()> {
+async fn post(
+    client: &reqwest::Client,
+    base: &str,
+    path: &str,
+    body: Vec<serde_json::Value>,
+) -> anyhow::Result<()> {
     let url = format!("{}{}", base.trim_end_matches('/'), path);
     let res = client.post(&url).json(&body).send().await?;
     if !res.status().is_success() {
@@ -125,8 +151,13 @@ async fn post(client: &reqwest::Client, base: &str, path: &str, body: Vec<serde_
 
 fn infer_level(line: &str) -> &'static str {
     let upper = line.to_ascii_uppercase();
-    if upper.contains("ERROR") || upper.contains("FATAL") { "ERROR" }
-    else if upper.contains("WARN") { "WARN" }
-    else if upper.contains("DEBUG") { "DEBUG" }
-    else { "INFO" }
+    if upper.contains("ERROR") || upper.contains("FATAL") {
+        "ERROR"
+    } else if upper.contains("WARN") {
+        "WARN"
+    } else if upper.contains("DEBUG") {
+        "DEBUG"
+    } else {
+        "INFO"
+    }
 }

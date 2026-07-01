@@ -4,9 +4,11 @@ mod assets;
 mod auth;
 mod config;
 mod error;
+mod ratelimit;
 mod routes;
 mod state;
 mod store;
+mod throttle;
 mod util;
 
 use std::net::SocketAddr;
@@ -14,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tower_http::cors::CorsLayer;
@@ -23,6 +26,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 use crate::config::Config;
 use crate::state::AppState;
+use crate::throttle::LoginThrottle;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,16 +46,29 @@ async fn main() -> anyhow::Result<()> {
         .connect_with(opts)
         .await
         .context("connecting to database")?;
-    sqlx::migrate!("./migrations").run(&db).await.context("running migrations")?;
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .context("running migrations")?;
 
-    store::seed(&db, &config).await.context("seeding database")?;
+    store::seed(&db, &config)
+        .await
+        .context("seeding database")?;
 
     let bind = config.bind.clone();
     let cors = build_cors(&config);
-    let state = Arc::new(AppState { db, config });
+    let ip_limiter = ratelimit::IpRateLimiter::new(config.global_rate_limit_per_min);
+    let max_body = config.max_request_body_bytes;
+    let state = Arc::new(AppState {
+        db,
+        config,
+        login_throttle: LoginThrottle::default(),
+        ip_limiter,
+    });
 
     let app = routes::router(state)
         .layer(cors)
+        .layer(DefaultBodyLimit::max(max_body))
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
@@ -76,15 +93,22 @@ async fn main() -> anyhow::Result<()> {
             HeaderName::from_static("permissions-policy"),
             HeaderValue::from_static("geolocation=(), microphone=(), camera=()"),
         ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=63072000; includeSubDomains"),
+        ))
         .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "Infinity Observe listening ? dashboard at the bind address");
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-        .context("server error")?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .context("server error")?;
     Ok(())
 }
 

@@ -1,9 +1,10 @@
-﻿pub mod auth_routes;
+pub mod auth_routes;
 pub mod keys;
 pub mod search;
 pub mod stats;
 pub mod topics;
 
+use axum::response::IntoResponse;
 use axum::routing::{delete, get, post};
 use axum::Router;
 
@@ -31,9 +32,26 @@ pub fn router(state: SharedState) -> Router {
         .route("/v1/keys/:id", delete(keys::delete_key))
         .route("/v1/stats", get(stats::stats))
         .fallback(crate::assets::handler)
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit,
+        ))
         .with_state(state)
 }
 
 async fn health() -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({"status":"ok","service":"infinity-stream"}))
+}
+
+async fn rate_limit(
+    axum::extract::State(st): axum::extract::State<SharedState>,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if !st.ip_limiter.allow(&addr.ip().to_string()) {
+        return crate::error::ApiError::TooManyRequests("global rate limit exceeded".into())
+            .into_response();
+    }
+    next.run(req).await
 }

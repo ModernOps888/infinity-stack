@@ -12,6 +12,7 @@ pub enum ApiError {
     Forbidden(String),
     NotFound(String),
     Conflict(String),
+    TooManyRequests(String),
     Internal(String),
 }
 
@@ -23,6 +24,7 @@ impl ApiError {
             ApiError::Forbidden(m) => (StatusCode::FORBIDDEN, "access_denied", m),
             ApiError::NotFound(m) => (StatusCode::NOT_FOUND, "not_found", m),
             ApiError::Conflict(m) => (StatusCode::CONFLICT, "conflict", m),
+            ApiError::TooManyRequests(m) => (StatusCode::TOO_MANY_REQUESTS, "rate_limited", m),
             ApiError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, "server_error", m),
         }
     }
@@ -32,13 +34,21 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         if let ApiError::Internal(detail) = &self {
             tracing::error!(error = %detail, "internal server error");
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({
-                "error": "server_error",
-                "error_description": "internal server error"
-            }))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "server_error",
+                    "error_description": "internal server error"
+                })),
+            )
+                .into_response();
         }
         let (status, code, msg) = self.parts();
-        (status, Json(json!({ "error": code, "error_description": msg }))).into_response()
+        (
+            status,
+            Json(json!({ "error": code, "error_description": msg })),
+        )
+            .into_response()
     }
 }
 

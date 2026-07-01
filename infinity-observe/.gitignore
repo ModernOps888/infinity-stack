@@ -1,0 +1,12 @@
+target/
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*signing_key*
+*.key
+*.log
+.env
+.env.*
+!*.env.example

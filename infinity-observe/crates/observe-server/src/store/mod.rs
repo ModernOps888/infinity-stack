@@ -20,11 +20,15 @@ fn future(secs: i64) -> String {
 }
 
 fn json_value(v: &Option<Value>) -> String {
-    v.as_ref().map(Value::to_string).unwrap_or_else(|| "{}".into())
+    v.as_ref()
+        .map(Value::to_string)
+        .unwrap_or_else(|| "{}".into())
 }
 
 fn json_map_string(v: &Option<Value>) -> String {
-    v.as_ref().map(Value::to_string).unwrap_or_else(|| "{}".into())
+    v.as_ref()
+        .map(Value::to_string)
+        .unwrap_or_else(|| "{}".into())
 }
 
 #[derive(Debug, FromRow, Serialize)]
@@ -119,15 +123,28 @@ pub struct AlertRow {
 }
 
 pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<()> {
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(db).await?;
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+        .fetch_one(db)
+        .await?;
     if count.0 == 0 {
-        let hash = observe_core::password::hash_password(&config.admin_password)?;
+        let default_placeholder = Config::default().admin_password;
+        let password = if config.admin_password == default_placeholder {
+            let generated = random_token();
+            tracing::warn!(
+                "no OBSERVE_ADMIN_PASSWORD set — generated a random admin password (shown once): {}",
+                generated
+            );
+            generated
+        } else {
+            config.admin_password.clone()
+        };
+        let hash = observe_core::password::hash_password(&password)?;
         sqlx::query(
             "INSERT INTO users (id, email, username, display_name, password_hash, role, created_at)
              VALUES (?, ?, 'admin', 'Infinity Observe Administrator', ?, 'admin', ?)",
         )
         .bind(Uuid::new_v4().to_string())
-        .bind(&config.admin_email)
+        .bind(config.admin_email.trim().to_lowercase())
         .bind(hash)
         .bind(now())
         .execute(db)
@@ -135,9 +152,10 @@ pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<()> {
         tracing::info!(email = %config.admin_email, "seeded initial admin account");
     }
 
-    let key_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ingest_keys WHERE revoked_at IS NULL")
-        .fetch_one(db)
-        .await?;
+    let key_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM ingest_keys WHERE revoked_at IS NULL")
+            .fetch_one(db)
+            .await?;
     if key_count.0 == 0 {
         let raw = format!("io_{}", random_token());
         create_ingest_key_with_raw(db, "default", &raw).await?;
@@ -147,7 +165,7 @@ pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<()> {
 }
 
 pub async fn get_user_by_email(db: &SqlitePool, email: &str) -> sqlx::Result<Option<UserRow>> {
-    sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE email = ?")
+    sqlx::query_as::<_, UserRow>("SELECT * FROM users WHERE lower(email) = lower(?)")
         .bind(email)
         .fetch_optional(db)
         .await
@@ -160,7 +178,12 @@ pub async fn get_user(db: &SqlitePool, id: &str) -> sqlx::Result<Option<UserRow>
         .await
 }
 
-pub async fn create_session(db: &SqlitePool, id_hash: &str, user_id: &str, ttl: i64) -> sqlx::Result<()> {
+pub async fn create_session(
+    db: &SqlitePool,
+    id_hash: &str,
+    user_id: &str,
+    ttl: i64,
+) -> sqlx::Result<()> {
     sqlx::query("INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
         .bind(id_hash)
         .bind(user_id)
@@ -172,22 +195,36 @@ pub async fn create_session(db: &SqlitePool, id_hash: &str, user_id: &str, ttl: 
 }
 
 pub async fn get_session_user(db: &SqlitePool, id_hash: &str) -> sqlx::Result<Option<String>> {
-    let row: Option<(String, String)> = sqlx::query_as("SELECT user_id, expires_at FROM sessions WHERE id = ?")
-        .bind(id_hash)
-        .fetch_optional(db)
-        .await?;
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT user_id, expires_at FROM sessions WHERE id = ?")
+            .bind(id_hash)
+            .fetch_optional(db)
+            .await?;
     Ok(match row {
-        Some((uid, exp)) if chrono::DateTime::parse_from_rfc3339(&exp).map(|t| t > Utc::now()).unwrap_or(false) => Some(uid),
+        Some((uid, exp))
+            if chrono::DateTime::parse_from_rfc3339(&exp)
+                .map(|t| t > Utc::now())
+                .unwrap_or(false) =>
+        {
+            Some(uid)
+        }
         _ => None,
     })
 }
 
 pub async fn delete_session(db: &SqlitePool, id_hash: &str) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM sessions WHERE id = ?").bind(id_hash).execute(db).await?;
+    sqlx::query("DELETE FROM sessions WHERE id = ?")
+        .bind(id_hash)
+        .execute(db)
+        .await?;
     Ok(())
 }
 
-async fn create_ingest_key_with_raw(db: &SqlitePool, name: &str, raw: &str) -> sqlx::Result<String> {
+async fn create_ingest_key_with_raw(
+    db: &SqlitePool,
+    name: &str,
+    raw: &str,
+) -> sqlx::Result<String> {
     let id = Uuid::new_v4().to_string();
     let prefix: String = raw.chars().take(12).collect();
     sqlx::query(
@@ -203,7 +240,10 @@ async fn create_ingest_key_with_raw(db: &SqlitePool, name: &str, raw: &str) -> s
     Ok(id)
 }
 
-pub async fn create_ingest_key(db: &SqlitePool, name: &str) -> sqlx::Result<(IngestKeyRow, String)> {
+pub async fn create_ingest_key(
+    db: &SqlitePool,
+    name: &str,
+) -> sqlx::Result<(IngestKeyRow, String)> {
     let raw = format!("io_{}", random_token());
     let id = create_ingest_key_with_raw(db, name, &raw).await?;
     let row = sqlx::query_as::<_, IngestKeyRow>(
@@ -233,13 +273,17 @@ pub async fn revoke_ingest_key(db: &SqlitePool, id: &str) -> sqlx::Result<()> {
 }
 
 pub async fn validate_ingest_key(db: &SqlitePool, key_hash: &str) -> sqlx::Result<Option<String>> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT id FROM ingest_keys WHERE key_hash = ? AND revoked_at IS NULL",
-    )
-    .bind(key_hash)
-    .fetch_optional(db)
-    .await?;
-    if let Some((id,)) = row {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT id, key_hash FROM ingest_keys WHERE revoked_at IS NULL")
+            .fetch_all(db)
+            .await?;
+    let mut matched_id = None;
+    for (id, stored_hash) in rows {
+        if observe_core::password::constant_time_eq(stored_hash.as_bytes(), key_hash.as_bytes()) {
+            matched_id = Some(id);
+        }
+    }
+    if let Some(id) = matched_id {
         sqlx::query("UPDATE ingest_keys SET last_used_at = ? WHERE id = ?")
             .bind(now())
             .bind(&id)
@@ -282,17 +326,37 @@ pub struct LogFilter<'a> {
 
 pub async fn list_logs(db: &SqlitePool, f: LogFilter<'_>) -> sqlx::Result<Vec<LogRow>> {
     let mut sql = String::from("SELECT * FROM logs WHERE 1=1");
-    if f.service.is_some() { sql.push_str(" AND service = ?"); }
-    if f.level.is_some() { sql.push_str(" AND level = ?"); }
-    if f.since.is_some() { sql.push_str(" AND timestamp >= ?"); }
-    let tokens: Vec<String> = f.q.unwrap_or("").split_whitespace().map(|s| format!("%{}%", s)).collect();
-    for _ in &tokens { sql.push_str(" AND message LIKE ?"); }
+    if f.service.is_some() {
+        sql.push_str(" AND service = ?");
+    }
+    if f.level.is_some() {
+        sql.push_str(" AND level = ?");
+    }
+    if f.since.is_some() {
+        sql.push_str(" AND timestamp >= ?");
+    }
+    let tokens: Vec<String> =
+        f.q.unwrap_or("")
+            .split_whitespace()
+            .map(|s| format!("%{}%", s))
+            .collect();
+    for _ in &tokens {
+        sql.push_str(" AND message LIKE ?");
+    }
     sql.push_str(" ORDER BY timestamp DESC LIMIT ?");
     let mut q = sqlx::query_as::<_, LogRow>(&sql);
-    if let Some(v) = f.service { q = q.bind(v); }
-    if let Some(v) = f.level { q = q.bind(v.to_uppercase()); }
-    if let Some(v) = f.since { q = q.bind(v); }
-    for tok in tokens { q = q.bind(tok); }
+    if let Some(v) = f.service {
+        q = q.bind(v);
+    }
+    if let Some(v) = f.level {
+        q = q.bind(v.to_uppercase());
+    }
+    if let Some(v) = f.since {
+        q = q.bind(v);
+    }
+    for tok in tokens {
+        q = q.bind(tok);
+    }
     q.bind(f.limit.clamp(1, 500)).fetch_all(db).await
 }
 
@@ -315,7 +379,11 @@ pub async fn insert_metric(db: &SqlitePool, m: NewMetric<'_>) -> sqlx::Result<()
     Ok(())
 }
 
-pub async fn metric_series(db: &SqlitePool, name: &str, since: Option<&str>) -> sqlx::Result<Vec<MetricRow>> {
+pub async fn metric_series(
+    db: &SqlitePool,
+    name: &str,
+    since: Option<&str>,
+) -> sqlx::Result<Vec<MetricRow>> {
     if let Some(since) = since {
         sqlx::query_as::<_, MetricRow>("SELECT * FROM metrics WHERE name = ? AND timestamp >= ? ORDER BY timestamp ASC LIMIT 2000")
             .bind(name)
@@ -323,26 +391,33 @@ pub async fn metric_series(db: &SqlitePool, name: &str, since: Option<&str>) -> 
             .fetch_all(db)
             .await
     } else {
-        sqlx::query_as::<_, MetricRow>("SELECT * FROM metrics WHERE name = ? ORDER BY timestamp ASC LIMIT 2000")
-            .bind(name)
-            .fetch_all(db)
-            .await
+        sqlx::query_as::<_, MetricRow>(
+            "SELECT * FROM metrics WHERE name = ? ORDER BY timestamp ASC LIMIT 2000",
+        )
+        .bind(name)
+        .fetch_all(db)
+        .await
     }
 }
 
 pub async fn metric_names(db: &SqlitePool) -> sqlx::Result<Vec<String>> {
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT DISTINCT name FROM metrics ORDER BY name LIMIT 200")
-        .fetch_all(db)
-        .await?;
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT name FROM metrics ORDER BY name LIMIT 200")
+            .fetch_all(db)
+            .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
 
 pub async fn metric_summary(db: &SqlitePool, name: &str) -> sqlx::Result<Option<QuantileSummary>> {
-    let rows: Vec<(f64,)> = sqlx::query_as("SELECT value FROM metrics WHERE name = ? ORDER BY timestamp DESC LIMIT 10000")
-        .bind(name)
-        .fetch_all(db)
-        .await?;
-    if rows.is_empty() { return Ok(None); }
+    let rows: Vec<(f64,)> = sqlx::query_as(
+        "SELECT value FROM metrics WHERE name = ? ORDER BY timestamp DESC LIMIT 10000",
+    )
+    .bind(name)
+    .fetch_all(db)
+    .await?;
+    if rows.is_empty() {
+        return Ok(None);
+    }
     let mut digest = TDigest::new(120.0);
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
@@ -408,7 +483,11 @@ pub async fn get_trace(db: &SqlitePool, trace_id: &str) -> sqlx::Result<Vec<Span
         .await
 }
 
-pub async fn list_traces(db: &SqlitePool, service: Option<&str>, limit: i64) -> sqlx::Result<Vec<TraceListRow>> {
+pub async fn list_traces(
+    db: &SqlitePool,
+    service: Option<&str>,
+    limit: i64,
+) -> sqlx::Result<Vec<TraceListRow>> {
     if let Some(service) = service {
         sqlx::query_as::<_, TraceListRow>(
             "SELECT trace_id, service, MIN(start_time) AS start_time, MAX(end_time) AS end_time,
@@ -437,7 +516,14 @@ pub async fn list_alert_rules(db: &SqlitePool) -> sqlx::Result<Vec<AlertRuleRow>
         .await
 }
 
-pub async fn create_alert_rule(db: &SqlitePool, name: &str, kind: &str, target: &str, threshold: f64, window_secs: i64) -> sqlx::Result<AlertRuleRow> {
+pub async fn create_alert_rule(
+    db: &SqlitePool,
+    name: &str,
+    kind: &str,
+    target: &str,
+    threshold: f64,
+    window_secs: i64,
+) -> sqlx::Result<AlertRuleRow> {
     let id = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO alert_rules (id, name, kind, target, threshold, window_secs, enabled, created_at)
@@ -459,7 +545,10 @@ pub async fn create_alert_rule(db: &SqlitePool, name: &str, kind: &str, target: 
 }
 
 pub async fn delete_alert_rule(db: &SqlitePool, id: &str) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM alert_rules WHERE id = ?").bind(id).execute(db).await?;
+    sqlx::query("DELETE FROM alert_rules WHERE id = ?")
+        .bind(id)
+        .execute(db)
+        .await?;
     Ok(())
 }
 
@@ -485,21 +574,36 @@ pub async fn evaluate_alerts(db: &SqlitePool) -> sqlx::Result<()> {
                 .fetch_one(db)
                 .await?;
                 if (count.0 as f64) > r.threshold {
-                    fire_alert(db, &r, "critical", &format!("{} error logs in last {}s", count.0, r.window_secs)).await?;
+                    fire_alert(
+                        db,
+                        &r,
+                        "critical",
+                        &format!("{} error logs in last {}s", count.0, r.window_secs),
+                    )
+                    .await?;
                 }
             }
             "metric_p99" => {
-                let vals: Vec<(f64,)> = sqlx::query_as("SELECT value FROM metrics WHERE name = ? AND timestamp >= ?")
-                    .bind(&r.target)
-                    .bind(&since)
-                    .fetch_all(db)
-                    .await?;
+                let vals: Vec<(f64,)> =
+                    sqlx::query_as("SELECT value FROM metrics WHERE name = ? AND timestamp >= ?")
+                        .bind(&r.target)
+                        .bind(&since)
+                        .fetch_all(db)
+                        .await?;
                 let mut d = TDigest::new(120.0);
-                for (v,) in vals { d.add(v); }
+                for (v,) in vals {
+                    d.add(v);
+                }
                 d.compress();
                 if let Some(p99) = d.quantile(0.99) {
                     if p99 > r.threshold {
-                        fire_alert(db, &r, "warning", &format!("metric {} p99 {:.2} > {:.2}", r.target, p99, r.threshold)).await?;
+                        fire_alert(
+                            db,
+                            &r,
+                            "warning",
+                            &format!("metric {} p99 {:.2} > {:.2}", r.target, p99, r.threshold),
+                        )
+                        .await?;
                     }
                 }
             }
@@ -509,13 +613,21 @@ pub async fn evaluate_alerts(db: &SqlitePool) -> sqlx::Result<()> {
     Ok(())
 }
 
-async fn fire_alert(db: &SqlitePool, r: &AlertRuleRow, severity: &str, message: &str) -> sqlx::Result<()> {
-    let recent: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM alerts WHERE rule_id = ? AND fired_at >= ?")
-        .bind(&r.id)
-        .bind((Utc::now() - Duration::seconds(60)).to_rfc3339())
-        .fetch_one(db)
-        .await?;
-    if recent.0 > 0 { return Ok(()); }
+async fn fire_alert(
+    db: &SqlitePool,
+    r: &AlertRuleRow,
+    severity: &str,
+    message: &str,
+) -> sqlx::Result<()> {
+    let recent: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM alerts WHERE rule_id = ? AND fired_at >= ?")
+            .bind(&r.id)
+            .bind((Utc::now() - Duration::seconds(60)).to_rfc3339())
+            .fetch_one(db)
+            .await?;
+    if recent.0 > 0 {
+        return Ok(());
+    }
     sqlx::query("INSERT INTO alerts (id, rule_id, rule_name, severity, message, fired_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(Uuid::new_v4().to_string())
         .bind(&r.id)
@@ -540,16 +652,37 @@ pub struct Stats {
 
 pub async fn stats(db: &SqlitePool) -> sqlx::Result<Stats> {
     let since = (Utc::now() - Duration::hours(1)).to_rfc3339();
-    let logs: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM logs").fetch_one(db).await?;
-    let metrics: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metrics").fetch_one(db).await?;
-    let spans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM spans").fetch_one(db).await?;
-    let recent_logs: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM logs WHERE timestamp >= ?").bind(&since).fetch_one(db).await?;
-    let recent_metrics: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metrics WHERE timestamp >= ?").bind(&since).fetch_one(db).await?;
-    let recent_spans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM spans WHERE start_time >= ?").bind(&since).fetch_one(db).await?;
-    let active_alerts: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL").fetch_one(db).await?;
+    let logs: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM logs")
+        .fetch_one(db)
+        .await?;
+    let metrics: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM metrics")
+        .fetch_one(db)
+        .await?;
+    let spans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM spans")
+        .fetch_one(db)
+        .await?;
+    let recent_logs: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM logs WHERE timestamp >= ?")
+        .bind(&since)
+        .fetch_one(db)
+        .await?;
+    let recent_metrics: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM metrics WHERE timestamp >= ?")
+            .bind(&since)
+            .fetch_one(db)
+            .await?;
+    let recent_spans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM spans WHERE start_time >= ?")
+        .bind(&since)
+        .fetch_one(db)
+        .await?;
+    let active_alerts: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM alerts WHERE resolved_at IS NULL")
+            .fetch_one(db)
+            .await?;
     let services: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM (SELECT service FROM logs UNION SELECT service FROM spans)",
-    ).fetch_one(db).await?;
+    )
+    .fetch_one(db)
+    .await?;
     Ok(Stats {
         logs: logs.0,
         metrics: metrics.0,

@@ -64,7 +64,10 @@ impl TDigest {
         self.min = self.min.min(value);
         self.max = self.max.max(value);
         self.count += weight;
-        self.centroids.push(Centroid { mean: value, weight });
+        self.centroids.push(Centroid {
+            mean: value,
+            weight,
+        });
         self.uncompressed += 1;
         if self.uncompressed > (self.compression as usize * 8).max(128) {
             self.compress();
@@ -167,9 +170,17 @@ mod tests {
         }
         d.compress();
         assert!(d.len() < 1_000, "digest should be compact, got {}", d.len());
-        for (q, expected, tolerance) in [(0.50, 5_000.5, 55.0), (0.90, 9_000.1, 90.0), (0.95, 9_500.05, 100.0), (0.99, 9_900.01, 110.0)] {
+        for (q, expected, tolerance) in [
+            (0.50, 5_000.5, 55.0),
+            (0.90, 9_000.1, 90.0),
+            (0.95, 9_500.05, 100.0),
+            (0.99, 9_900.01, 110.0),
+        ] {
             let got = d.quantile(q).unwrap();
-            assert!((got - expected).abs() <= tolerance, "q={q}: got {got}, expected {expected}");
+            assert!(
+                (got - expected).abs() <= tolerance,
+                "q={q}: got {got}, expected {expected}"
+            );
         }
     }
 
@@ -177,8 +188,12 @@ mod tests {
     fn merge_preserves_tail_accuracy() {
         let mut a = TDigest::new(120.0);
         let mut b = TDigest::new(120.0);
-        for i in 1..=5_000 { a.add(i as f64); }
-        for i in 5_001..=10_000 { b.add(i as f64); }
+        for i in 1..=5_000 {
+            a.add(i as f64);
+        }
+        for i in 5_001..=10_000 {
+            b.add(i as f64);
+        }
         a.merge(&b);
         assert!((a.quantile(0.99).unwrap() - 9_900.01).abs() < 100.0);
     }

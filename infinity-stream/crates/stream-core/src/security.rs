@@ -1,4 +1,4 @@
-﻿use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
@@ -24,8 +24,12 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() { return false; }
+    if a.len() != b.len() {
+        return false;
+    }
     let mut diff = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) { diff |= x ^ y; }
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
     diff == 0
 }

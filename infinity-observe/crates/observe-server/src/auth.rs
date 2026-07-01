@@ -21,7 +21,9 @@ impl Principal {
         if observe_core::rbac::any_permission(&self.permissions, required) {
             Ok(())
         } else {
-            Err(ApiError::Forbidden(format!("missing permission: {required}")))
+            Err(ApiError::Forbidden(format!(
+                "missing permission: {required}"
+            )))
         }
     }
 }
@@ -32,7 +34,11 @@ pub struct IngestAuth {
 }
 
 fn cookie_value(parts: &Parts, name: &str) -> Option<String> {
-    let header = parts.headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
+    let header = parts
+        .headers
+        .get(axum::http::header::COOKIE)?
+        .to_str()
+        .ok()?;
     header.split(';').find_map(|kv| {
         let (k, v) = kv.trim().split_once('=')?;
         (k == name).then(|| v.to_string())
@@ -40,7 +46,8 @@ fn cookie_value(parts: &Parts, name: &str) -> Option<String> {
 }
 
 fn bearer(parts: &Parts) -> Option<String> {
-    parts.headers
+    parts
+        .headers
         .get(axum::http::header::AUTHORIZATION)?
         .to_str()
         .ok()?
@@ -52,7 +59,10 @@ fn bearer(parts: &Parts) -> Option<String> {
 impl FromRequestParts<SharedState> for Principal {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &SharedState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> Result<Self, Self::Rejection> {
         if let Some(tok) = bearer(parts).or_else(|| cookie_value(parts, SESSION_COOKIE)) {
             let hash = sha256_hex(&tok);
             if let Some(uid) = store::get_session_user(&state.db, &hash).await? {
@@ -67,7 +77,10 @@ impl FromRequestParts<SharedState> for Principal {
 impl FromRequestParts<SharedState> for IngestAuth {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &SharedState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> Result<Self, Self::Rejection> {
         let Some(tok) = bearer(parts) else {
             return Err(ApiError::Unauthorized("missing bearer ingest key".into()));
         };
@@ -87,5 +100,10 @@ async fn resolve(state: &SharedState, user_id: &str) -> Result<Principal, ApiErr
         return Err(ApiError::Forbidden("account disabled".into()));
     }
     let permissions = observe_core::rbac::permissions_for_role(&user.role);
-    Ok(Principal { user_id: user.id, email: user.email, role: user.role, permissions })
+    Ok(Principal {
+        user_id: user.id,
+        email: user.email,
+        role: user.role,
+        permissions,
+    })
 }
