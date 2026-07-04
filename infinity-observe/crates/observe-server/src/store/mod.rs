@@ -123,6 +123,11 @@ pub struct AlertRow {
 }
 
 pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<()> {
+    // Purge expired sessions so the table cannot grow without bound.
+    sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
+        .bind(now())
+        .execute(db)
+        .await?;
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
         .fetch_one(db)
         .await?;
@@ -273,26 +278,25 @@ pub async fn revoke_ingest_key(db: &SqlitePool, id: &str) -> sqlx::Result<()> {
 }
 
 pub async fn validate_ingest_key(db: &SqlitePool, key_hash: &str) -> sqlx::Result<Option<String>> {
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT id, key_hash FROM ingest_keys WHERE revoked_at IS NULL")
-            .fetch_all(db)
-            .await?;
-    let mut matched_id = None;
-    for (id, stored_hash) in rows {
+    // Indexed lookup by hash instead of scanning every key: keeps ingest auth
+    // O(1) regardless of how many keys exist (no scan-based DoS).
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT id, key_hash FROM ingest_keys WHERE key_hash = ? AND revoked_at IS NULL",
+    )
+    .bind(key_hash)
+    .fetch_optional(db)
+    .await?;
+    if let Some((id, stored_hash)) = row {
         if observe_core::password::constant_time_eq(stored_hash.as_bytes(), key_hash.as_bytes()) {
-            matched_id = Some(id);
+            sqlx::query("UPDATE ingest_keys SET last_used_at = ? WHERE id = ?")
+                .bind(now())
+                .bind(&id)
+                .execute(db)
+                .await?;
+            return Ok(Some(id));
         }
     }
-    if let Some(id) = matched_id {
-        sqlx::query("UPDATE ingest_keys SET last_used_at = ? WHERE id = ?")
-            .bind(now())
-            .bind(&id)
-            .execute(db)
-            .await?;
-        Ok(Some(id))
-    } else {
-        Ok(None)
-    }
+    Ok(None)
 }
 
 pub struct NewLog<'a> {
@@ -410,7 +414,7 @@ pub async fn metric_names(db: &SqlitePool) -> sqlx::Result<Vec<String>> {
 
 pub async fn metric_summary(db: &SqlitePool, name: &str) -> sqlx::Result<Option<QuantileSummary>> {
     let rows: Vec<(f64,)> = sqlx::query_as(
-        "SELECT value FROM metrics WHERE name = ? ORDER BY timestamp DESC LIMIT 10000",
+        "SELECT value FROM metrics WHERE name = ? ORDER BY timestamp DESC LIMIT 2000",
     )
     .bind(name)
     .fetch_all(db)

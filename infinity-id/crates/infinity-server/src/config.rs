@@ -43,7 +43,7 @@ impl Default for Config {
             access_token_ttl_secs: 3600,
             refresh_token_ttl_secs: 60 * 60 * 24 * 30,
             code_ttl_secs: 300,
-            session_ttl_secs: 60 * 60 * 8,
+            session_ttl_secs: 60 * 60 * 2,
             global_rate_limit_per_min: 600,
             mfa_issuer: "Infinity ID".into(),
             admin_email: "admin@infinity.local".into(),

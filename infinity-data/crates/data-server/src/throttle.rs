@@ -46,6 +46,13 @@ impl LoginThrottle {
     pub fn record_failure(&self, key: &str) {
         let now = now();
         let mut map = self.state.lock().unwrap();
+        // Bound memory: prune stale entries so an attacker cycling identifiers
+        // cannot grow the map without bound.
+        if map.len() >= 100_000 {
+            map.retain(|_, e| {
+                e.locked_until > now || now.saturating_sub(e.window_start) <= self.window_secs
+            });
+        }
         let e = map.entry(key.to_string()).or_insert(Entry {
             window_start: now,
             fails: 0,

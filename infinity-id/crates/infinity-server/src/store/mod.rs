@@ -631,6 +631,12 @@ pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<()> {
     })
     .await?;
 
+    // Purge expired sessions so the table cannot grow without bound.
+    sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
+        .bind(now())
+        .execute(db)
+        .await?;
+
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(db).await?;
     if count.0 == 0 {
         // Never persist a shipped default credential. If the operator left the

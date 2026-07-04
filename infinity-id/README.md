@@ -93,15 +93,18 @@ Infinity ID is built to withstand scrutiny from a security professional. Highlig
 | **Scopes** | Requested scopes are **narrowed to the client's registration** — no self-asserted privileged scopes |
 | **Token audience** | Management API requires a **first-party** token (audience = issuer) — third-party RP tokens can't be replayed against `/admin/*`. The edge can pin a per-route `audience` so a token minted for another client is rejected |
 | **Token type** | `id_token`s are rejected wherever an access token is expected (server **and** edge) |
-| **Sessions** | Opaque, hashed at rest, `HttpOnly` + `SameSite=Strict` (+ `Secure` by default off loopback), **server-side revocation on logout** |
-| **Brute force** | Per-account lockout + global per-IP rate limit (Argon2 makes floods expensive, so this matters) |
+| **Sessions** | Opaque, hashed at rest, `HttpOnly` + `SameSite=Strict` (+ `Secure` by default off loopback), **server-side revocation on logout**; 2-hour default TTL and expired sessions purged at startup |
+| **Brute force** | Per-account lockout + global per-IP rate limit (Argon2 makes floods expensive, so this matters); throttle state is memory-bounded |
 | **User enumeration** | Uniform errors + timing equalization; disabled-account status is only checked **after** password verification |
 | **Transport hardening** | CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` |
 | **Error handling** | Internal/DB errors are logged server-side and returned to clients as generic messages |
+| **Built-in roles** | `superadmin` / `admin` / `user` are **immutable via the API** — a compromised admin session can't strip superadmin permissions and lock operators out |
+| **Request safety** | 1 MiB request-body cap on all endpoints (memory-exhaustion DoS) |
+| **Profile scope** | `GET /auth/me` requires a **first-party** context — third-party access tokens can't read full roles/permissions |
 | **Edge** | Validates token audience; matches `required_scope` against scopes and `required_role` against roles **separately** (roles never satisfy a scope check); strips client-supplied identity headers and injects a verified `X-Infinity-Sub` |
 | **First run** | If no admin password is provided, a strong random one is generated and shown once in the logs |
 
-> This codebase passed two rounds of automated security review. Findings from the first round (scope self-assertion, audience confusion, role-escalation, edge token-type) and the second (TOTP code replay, refresh-token client authentication, auth-code redemption race, edge audience/role–scope separation) were all remediated and verified.
+> This codebase passed three rounds of automated security review. Findings from the first round (scope self-assertion, audience confusion, role-escalation, edge token-type), the second (TOTP code replay, refresh-token client authentication, auth-code redemption race, edge audience/role–scope separation), and the third (first-party `/auth/me`, immutable built-in roles, request-body cap, session TTL/purge, bounded throttle memory) were all remediated and verified.
 
 **TLS:** terminate HTTPS at Infinity Edge or a load balancer; set `issuer = https://…` so cookies become `Secure`.
 
@@ -171,7 +174,7 @@ Layered: built-in defaults → `Config.toml` → `INFINITY_*` environment variab
 | `data_dir` / `INFINITY_DATA_DIR` | `data` | Signing key + DB directory |
 | `access_token_ttl_secs` | `3600` | Access-token lifetime |
 | `refresh_token_ttl_secs` | `2592000` | Refresh-token lifetime |
-| `session_ttl_secs` | `28800` | Dashboard session lifetime |
+| `session_ttl_secs` | `7200` | Dashboard session lifetime |
 | `admin_email` / `admin_password` | see notes | Seed admin (first run only) |
 | `global_rate_limit_per_min` | `600` | Per-IP request cap / 60s (0 = off) |
 | `mfa_issuer` | `Infinity ID` | Label in authenticator apps |

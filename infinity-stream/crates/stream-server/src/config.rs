@@ -27,7 +27,7 @@ impl Default for Config {
             public_url: "http://localhost:8092".into(),
             database_url: "sqlite://data/stream.db".into(),
             data_dir: "data".into(),
-            session_ttl_secs: 60 * 60 * 8,
+            session_ttl_secs: 60 * 60 * 2,
             global_rate_limit_per_min: 600,
             max_json_body_bytes: 1024 * 1024,
             max_batch_records: 1_000,

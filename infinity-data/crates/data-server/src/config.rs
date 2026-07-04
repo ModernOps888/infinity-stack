@@ -25,7 +25,7 @@ impl Default for Config {
             public_url: "http://localhost:8094".into(),
             database_url: "sqlite://data/infinity_data.db".into(),
             data_dir: "data".into(),
-            session_ttl_secs: 60 * 60 * 8,
+            session_ttl_secs: 60 * 60 * 2,
             global_rate_limit_per_min: 600,
             admin_email: "admin@infinity.local".into(),
             admin_password: String::new(),

@@ -56,11 +56,11 @@ A modern dark-theme console is embedded in the binary — no separate frontend t
 | Area | Hardening |
 |---|---|
 | Passwords | Argon2id (memory-hard) |
-| API keys | Stored hashed, **constant-time** comparison; **least-privilege data-plane scope** (produce/consume/search/create) — a leaked key cannot delete topics/indexes or manage keys/admin |
-| Sessions | `HttpOnly` + `SameSite=Strict` cookies (+ `Secure` by default off loopback), server-side revocation |
+| API keys | Stored hashed, **O(1) indexed lookup** with **constant-time** comparison; **least-privilege data-plane scope** (produce/consume/search/create) — a leaked key cannot delete topics/indexes, and key-management routes **explicitly reject API keys** even if scopes are ever widened |
+| Sessions | `HttpOnly` + `SameSite=Strict` cookies (+ `Secure` by default off loopback), server-side revocation; 2-hour default TTL, expired sessions purged at startup |
 | Access control | RBAC guard on admin + write paths; no unauthenticated produce |
 | Path safety | Topic / index / group names are validated at the API **and** re-checked at the commit-log filesystem sink — no path traversal |
-| Abuse | Per-account login lockout + global per-IP rate limiting |
+| Abuse | Per-account login lockout + global per-IP rate limiting; throttle state is memory-bounded |
 | Transport | CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` |
 | Errors | Generic client responses; internal errors logged server-side only |
 | SQL | Parameterized queries throughout |

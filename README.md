@@ -24,7 +24,7 @@ Rust's memory safety, C-like performance, and lack of garbage collection (predic
 | [Infinity Data](./infinity-data/) | Snowflake · Databricks · Pinecone | 🟢 Runnable · hardened (alpha) |
 | [Infinity Stream](./infinity-stream/) | Kafka/Confluent · Elasticsearch · Algolia | 🟢 Runnable · hardened (alpha) |
 
-Every service ships hardened by default — Argon2id password storage, opaque server-side sessions with `HttpOnly`/`SameSite=Strict` (+ `Secure`) cookies, RBAC, per-account lockout + per-IP rate limiting, hardened HTTP security headers, and fully parameterized SQL. Each tool has passed automated security review with findings remediated and verified.
+Every service ships hardened by default — Argon2id password storage, opaque server-side sessions with `HttpOnly`/`SameSite=Strict` (+ `Secure`) cookies and a 2-hour default TTL, RBAC, O(1) indexed API-key auth with constant-time confirmation, per-account lockout + per-IP rate limiting (memory-bounded), hardened HTTP security headers, and fully parameterized SQL. Each tool has passed automated security review with findings remediated and verified.
 
 ---
 

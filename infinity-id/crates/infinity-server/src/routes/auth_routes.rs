@@ -132,6 +132,9 @@ pub async fn me(
     State(st): State<SharedState>,
     principal: Principal,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // First-party contexts only: a third-party access token must not be able
+    // to read the full profile / roles / permissions of its subject.
+    principal.require_first_party()?;
     let user = store::get_user_row(&st.db, &principal.user_id)
         .await?
         .ok_or_else(|| ApiError::NotFound("user not found".into()))?;

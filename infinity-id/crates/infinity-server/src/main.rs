@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use infinity_core::keys::SigningKey;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -68,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let app = routes::router(state)
+        // Cap request bodies (forms/JSON) to prevent memory-exhaustion DoS.
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(cors)
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,

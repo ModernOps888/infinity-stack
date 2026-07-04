@@ -39,6 +39,11 @@ pub struct OffsetRow {
 }
 
 pub async fn seed(db: &SqlitePool, config: &Config) -> anyhow::Result<Option<String>> {
+    // Purge expired sessions so the table cannot grow without bound.
+    sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
+        .bind(now())
+        .execute(db)
+        .await?;
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
         .fetch_one(db)
         .await?;
@@ -137,11 +142,16 @@ pub async fn delete_session(db: &SqlitePool, id_hash: &str) -> sqlx::Result<()> 
 }
 
 pub async fn api_key_subject(db: &SqlitePool, hash: &str) -> sqlx::Result<Option<String>> {
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT id, key_hash FROM api_keys WHERE revoked_at IS NULL")
-            .fetch_all(db)
-            .await?;
-    for (id, stored_hash) in rows {
+    // Indexed lookup by hash instead of scanning every key: keeps auth O(1)
+    // (no DoS as the key count grows) and avoids the timing difference between
+    // "no match" and "match found" that a full scan with early exit leaks.
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT id, key_hash FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL",
+    )
+    .bind(hash)
+    .fetch_optional(db)
+    .await?;
+    if let Some((id, stored_hash)) = row {
         if stream_core::security::constant_time_eq(hash.as_bytes(), stored_hash.as_bytes()) {
             sqlx::query("UPDATE api_keys SET last_used_at = ? WHERE id = ?")
                 .bind(now())

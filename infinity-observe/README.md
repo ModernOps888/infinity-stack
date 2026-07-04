@@ -89,10 +89,10 @@ Infinity Observe is hardened by default:
 |---|---|
 | **Password storage** | Argon2id (memory-hard OWASP parameters: 19 MiB, 2 passes). |
 | **First run** | If `OBSERVE_ADMIN_PASSWORD` is not set, a strong random admin password is generated and printed once in logs. |
-| **Sessions** | Opaque random token, hashed at rest, server-side expiration/revocation, `HttpOnly`, `SameSite=Strict`, `Secure` by default (omitted only for loopback dev). |
+| **Sessions** | Opaque random token, hashed at rest, server-side expiration/revocation, `HttpOnly`, `SameSite=Strict`, `Secure` by default (omitted only for loopback dev); 2-hour default TTL and expired sessions purged at startup. |
 | **RBAC** | Admin-only guards for alert mutation and ingest-key management; viewer role is read-only. |
-| **Ingest auth** | Logs/metrics/traces require `Authorization: Bearer <ingest-key>`; active key hashes are compared in constant time. |
-| **Brute force** | Per-account login lockout plus global per-IP fixed-window rate limiting. |
+| **Ingest auth** | Logs/metrics/traces require `Authorization: Bearer <ingest-key>`; keys are resolved via an **O(1) indexed hash lookup** with constant-time confirmation — auth cost doesn't grow with the number of keys. |
+| **Brute force** | Per-account login lockout plus global per-IP fixed-window rate limiting; throttle state is memory-bounded. |
 | **User enumeration** | Uniform login errors and dummy Argon2id verification for unknown users; disabled-account status is checked only after password verification. |
 | **Transport hardening** | CSP, HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`. |
 | **Error handling** | DB/internal errors are logged server-side and returned to clients as generic JSON. |
@@ -170,7 +170,7 @@ Layered: built-in defaults → `Config.toml` → `OBSERVE_*` environment variabl
 | `public_url` / `OBSERVE_PUBLIC_URL` | `http://localhost:8090` | External URL; `https://` enables `Secure` cookies. |
 | `database_url` / `OBSERVE_DATABASE_URL` | `sqlite://data/observe.db` | SQLite connection string. |
 | `data_dir` / `OBSERVE_DATA_DIR` | `data` | Directory for local DB/data files. |
-| `session_ttl_secs` / `OBSERVE_SESSION_TTL_SECS` | `28800` | Dashboard session lifetime. |
+| `session_ttl_secs` / `OBSERVE_SESSION_TTL_SECS` | `7200` | Dashboard session lifetime. |
 | `global_rate_limit_per_min` / `OBSERVE_GLOBAL_RATE_LIMIT_PER_MIN` | `600` | Per-IP request cap per minute (`0` disables). |
 | `max_request_body_bytes` / `OBSERVE_MAX_REQUEST_BODY_BYTES` | `1048576` | Maximum JSON body size. |
 | `admin_email` / `OBSERVE_ADMIN_EMAIL` | `admin@infinity.local` | Seed admin email on first run. |
