@@ -9,12 +9,25 @@ Predictable performance. Memory safety. No GC pauses. Self-hostable. No per-seat
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./infinity-id/LICENSE)
 [![Rust](https://img.shields.io/badge/built%20with-Rust-000000?logo=rust)](https://www.rust-lang.org/)
 [![CI](https://github.com/ModernOps888/infinity-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernOps888/infinity-stack/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/ModernOps888/infinity-stack?style=social)](https://github.com/ModernOps888/infinity-stack/stargazers)
+[![Forks](https://img.shields.io/github/forks/ModernOps888/infinity-stack?style=social)](https://github.com/ModernOps888/infinity-stack/network/members)
+[![Last commit](https://img.shields.io/github/last-commit/ModernOps888/infinity-stack)](https://github.com/ModernOps888/infinity-stack/commits/main)
+
+If this stack is useful to you, a ⭐ helps other people building on Rust find it.
 
 </div>
 
 ---
 
 Rust's memory safety, C-like performance, and lack of garbage collection (predictable tail latency) make it the ideal tool to commoditize expensive cloud infrastructure. Infinity Stack spans four heavily-monopolized verticals — **identity, observability, data, and streaming** — each a self-hostable, security-hardened Rust service with an embedded admin dashboard.
+
+| Infinity ID | Infinity Observe |
+|---|---|
+| ![Infinity ID overview](./infinity-id/docs/img/overview.png) | ![Infinity Observe overview](./infinity-observe/docs/img/overview.png) |
+
+| Infinity Data | Infinity Stream |
+|---|---|
+| ![Infinity Data overview](./infinity-data/docs/img/overview.png) | ![Infinity Stream overview](./infinity-stream/docs/img/overview.png) |
 
 ## The products
 
@@ -65,3 +78,9 @@ infinity-stack/
 ## License
 
 [Apache-2.0](./infinity-id/LICENSE) © Infinity Stack.
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ModernOps888/infinity-stack&type=Date)](https://star-history.com/#ModernOps888/infinity-stack&Date)
