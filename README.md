@@ -8,6 +8,7 @@ Predictable performance. Memory safety. No GC pauses. Self-hostable. No per-seat
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./infinity-id/LICENSE)
 [![Rust](https://img.shields.io/badge/built%20with-Rust-000000?logo=rust)](https://www.rust-lang.org/)
+[![CI](https://github.com/ModernOps888/infinity-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernOps888/infinity-stack/actions/workflows/ci.yml)
 
 </div>
 
