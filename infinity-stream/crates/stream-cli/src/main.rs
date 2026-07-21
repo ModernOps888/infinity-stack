@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
         .or_else(|| std::env::var("STREAM_API_KEY").ok())
         .or_else(|| std::env::var("INFINITY_STREAM_KEY").ok())
         .context("--key, STREAM_API_KEY or INFINITY_STREAM_KEY required")?;
-    let cmd = args.get(0).cloned().context("command required")?;
+    let cmd = args.first().cloned().context("command required")?;
     args.remove(0);
     let http = reqwest::Client::new();
     match cmd.as_str() {

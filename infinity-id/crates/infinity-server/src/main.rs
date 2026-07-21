@@ -1,15 +1,7 @@
 //! Infinity ID — secure-by-design identity provider (OIDC/OAuth2 + MFA + RBAC).
-
-mod assets;
-mod auth;
-mod config;
-mod error;
-mod ratelimit;
-mod routes;
-mod state;
-mod store;
-mod throttle;
-mod util;
+//!
+//! Thin binary entrypoint; all logic lives in the `infinity_server` library
+//! crate (`src/lib.rs`) so it can also be exercised by integration tests.
 
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -18,16 +10,17 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderName, HeaderValue, Method};
-use infinity_core::keys::SigningKey;
+use infinity_core::keys::KeyRing;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::config::Config;
-use crate::state::AppState;
-use crate::throttle::LoginThrottle;
+use infinity_server::config::Config;
+use infinity_server::state::AppState;
+use infinity_server::throttle::LoginThrottle;
+use infinity_server::{ratelimit, routes, store};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,10 +43,16 @@ async fn main() -> anyhow::Result<()> {
         .context("connecting to database")?;
     sqlx::migrate!("./migrations").run(&db).await.context("running migrations")?;
 
-    // Signing key (persisted so live tokens survive restarts).
+    // Signing key ring (persisted so live tokens survive restarts and a
+    // rotation doesn't invalidate tokens signed under the retired key).
     let key_path = std::path::Path::new(&config.data_dir).join("signing_key.pem");
-    let key = SigningKey::load_or_generate(&key_path).context("loading signing key")?;
-    tracing::info!(kid = %key.kid, "loaded RS256 signing key");
+    let retention_secs = config.refresh_token_ttl_secs.max(config.access_token_ttl_secs);
+    let key = KeyRing::load_or_generate(&key_path, retention_secs).context("loading signing key")?;
+    tracing::info!(
+        kid = %key.active.kid,
+        retired_keys = key.previous.len(),
+        "loaded RS256 signing key ring"
+    );
 
     store::seed(&db, &config).await.context("seeding database")?;
 
@@ -62,7 +61,8 @@ async fn main() -> anyhow::Result<()> {
     let ip_limiter = ratelimit::IpRateLimiter::new(config.global_rate_limit_per_min);
     let state = Arc::new(AppState {
         db,
-        key,
+        key: std::sync::RwLock::new(key),
+        key_path,
         config,
         login_throttle: LoginThrottle::default(),
         ip_limiter,

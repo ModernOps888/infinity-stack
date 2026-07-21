@@ -29,3 +29,9 @@ tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+# axum 0.7's Router implements the `tower` 0.5 `Service` trait directly (not
+# the workspace-pinned 0.4), so pin the dev-only `tower` used for
+# `ServiceExt::oneshot` in tests to match.
+tower = { version = "0.5", features = ["util"] }

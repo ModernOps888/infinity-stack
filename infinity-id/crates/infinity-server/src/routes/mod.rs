@@ -3,6 +3,7 @@
 pub mod audit;
 pub mod auth_routes;
 pub mod clients;
+pub mod keys;
 pub mod mfa;
 pub mod oidc;
 pub mod roles;
@@ -56,6 +57,8 @@ pub fn router(state: SharedState) -> Router {
         // Admin: roles
         .route("/admin/roles", get(roles::list))
         .route("/admin/roles", put(roles::upsert))
+        // Admin: signing-key rotation
+        .route("/admin/keys/rotate", post(keys::rotate))
         // Admin: audit
         .route("/admin/audit", get(audit::list));
 

@@ -1,16 +1,5 @@
 //! Infinity Observe ? production-grade observability in a single Rust binary.
 
-mod assets;
-mod auth;
-mod config;
-mod error;
-mod ratelimit;
-mod routes;
-mod state;
-mod store;
-mod throttle;
-mod util;
-
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -24,9 +13,10 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::config::Config;
-use crate::state::AppState;
-use crate::throttle::LoginThrottle;
+use observe_server::config::Config;
+use observe_server::state::AppState;
+use observe_server::throttle::LoginThrottle;
+use observe_server::{ratelimit, routes, store};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

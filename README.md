@@ -24,7 +24,7 @@ Rust's memory safety, C-like performance, and lack of garbage collection (predic
 | [Infinity Data](./infinity-data/) | Snowflake · Databricks · Pinecone | 🟢 Runnable · hardened (alpha) |
 | [Infinity Stream](./infinity-stream/) | Kafka/Confluent · Elasticsearch · Algolia | 🟢 Runnable · hardened (alpha) |
 
-Every service ships hardened by default — Argon2id password storage, opaque server-side sessions with `HttpOnly`/`SameSite=Strict` (+ `Secure`) cookies and a 2-hour default TTL, RBAC, O(1) indexed API-key auth with constant-time confirmation, per-account lockout + per-IP rate limiting (memory-bounded), hardened HTTP security headers, and fully parameterized SQL. Each tool has passed automated security review with findings remediated and verified.
+Every service ships hardened by default — Argon2id password storage, opaque server-side sessions with `HttpOnly`/`SameSite=Strict` (+ `Secure`) cookies and a 2-hour default TTL, RBAC, O(1) indexed API-key auth with constant-time confirmation, per-account lockout + per-IP rate limiting (memory-bounded), hardened HTTP security headers, and fully parameterized SQL. Each tool has passed automated security review with findings remediated and verified — most recently a 4th round that upgraded `sqlx` 0.7 → 0.8 across all four workspaces (clearing several transitive rustls/webpki advisories and a yanked `spin` dependency) and removed the unused `rsa` dependency from Observe, Data and Stream; ID keeps `rsa` for JWKS key generation and documents the one remaining advisory as an accepted, monitored risk. This round also added a GitHub Actions CI matrix (check/test/clippy/audit per service) and, for Infinity ID, signing-key rotation so a manual JWKS rotation never invalidates a live session or access token.
 
 ---
 

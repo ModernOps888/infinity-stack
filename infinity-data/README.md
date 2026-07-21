@@ -67,6 +67,8 @@ An embedded dark-theme admin console — no separate frontend to deploy.
 | Errors | Generic client responses; internal errors logged server-side only |
 | SQL | Parameterized queries throughout |
 
+> **Dependency hardening (`cargo audit`):** `sqlx` was bumped `0.7` → `0.8`, fixing RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104, RUSTSEC-2024-0363, and RUSTSEC-2025-0134 (unmaintained `rustls-pemfile`), and clearing a yanked `spin` dependency warning. The unused `rsa` dependency (RUSTSEC-2023-0071, Marvin Attack timing side-channel) was removed entirely — it had zero usage sites anywhere in this codebase. `cargo audit` still lists RUSTSEC-2023-0071 in `Cargo.lock` because `sqlx`'s optional MySQL backend (unused here — this service is SQLite-only) pins a transitive `rsa` version that's never compiled into or reachable from this binary (confirmed via `cargo tree -i rsa`, which shows no reverse dependency in the built graph); this advisory is suppressed via `.cargo/audit.toml` with the reasoning documented there. `cargo audit` now passes clean.
+
 ---
 
 ## 🏗️ Architecture

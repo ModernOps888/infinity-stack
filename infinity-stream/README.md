@@ -64,6 +64,7 @@ A modern dark-theme console is embedded in the binary — no separate frontend t
 | Transport | CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` |
 | Errors | Generic client responses; internal errors logged server-side only |
 | SQL | Parameterized queries throughout |
+| Dependencies | `sqlx` upgraded 0.7 → 0.8.6, resolving RUSTSEC-2026-0098/0099/0104, RUSTSEC-2024-0363 and RUSTSEC-2025-0134 (vulnerable `rustls-webpki`, unmaintained `rustls-pemfile`, yanked `spin`) with **zero feature-flag changes**; the orphaned `rsa` workspace dependency (dead code, pulled in by nothing) was **removed entirely**, closing our direct exposure to RUSTSEC-2023-0071 (Marvin Attack timing side-channel). `cargo audit` still lists RUSTSEC-2023-0071 in `Cargo.lock` purely because `sqlx`'s optional MySQL backend (unused — this service is SQLite-only) pins a transitive `rsa` version that's never compiled into or reachable from this binary (confirmed via `cargo tree -i rsa`); suppressed via `.cargo/audit.toml` with the reasoning documented there. `cargo audit` now passes clean |
 
 ---
 

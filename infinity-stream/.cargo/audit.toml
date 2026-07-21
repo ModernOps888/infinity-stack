@@ -1,0 +1,10 @@
+[advisories]
+# RUSTSEC-2023-0071 (rsa Marvin Attack, no upstream fix): this workspace has no
+# direct `rsa` dependency. The entry only exists in Cargo.lock because sqlx's
+# internal macros crate lists `sqlx-mysql` (whose auth path depends on `rsa`)
+# as an optional dependency alongside `sqlx-postgres`/`sqlx-sqlite` — Cargo.lock
+# records all three regardless of which backend feature is actually enabled.
+# This workspace only enables the `sqlite` feature (see Cargo.toml), so
+# sqlx-mysql — and therefore rsa — is never compiled in. Confirmed via
+# `cargo tree -i rsa`, which shows no reverse dependency in the built graph.
+ignore = ["RUSTSEC-2023-0071"]

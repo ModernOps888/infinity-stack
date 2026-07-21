@@ -100,6 +100,7 @@ Infinity Observe is hardened by default:
 | **Request safety** | Configurable body limit, batch caps and string/JSON size validation. |
 | **Secret hygiene** | `.gitignore` excludes `data/`, `target/`, databases, keys, logs and `.env` files. |
 | **JWTs/JWKS** | Infinity Observe does not issue JWTs; ingest uses opaque API keys and the dashboard uses server-side sessions. |
+| **Dependency hardening (4th round)** | `sqlx` upgraded 0.7 → 0.8, resolving RUSTSEC-2026-0098/0099/0104, RUSTSEC-2024-0363 and RUSTSEC-2025-0134 (vulnerable/unmaintained TLS deps and a yanked `spin` transitive). The unused `rsa` dependency (RUSTSEC-2023-0071, Marvin Attack timing side-channel) was removed outright — it had zero call sites in this codebase. `cargo audit` still lists RUSTSEC-2023-0071 in `Cargo.lock` purely because `sqlx`'s optional MySQL backend (unused — this service is SQLite-only) pins a transitive `rsa` version that's never compiled into or reachable from this binary (confirmed via `cargo tree -i rsa`); suppressed via `.cargo/audit.toml` with the reasoning documented there. `cargo audit` now passes clean. |
 
 **TLS:** terminate HTTPS at a load balancer or reverse proxy. Session cookies are marked `Secure` by default for any non-loopback `OBSERVE_PUBLIC_URL`, so browsers only send them over HTTPS.
 

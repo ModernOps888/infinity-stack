@@ -52,7 +52,7 @@ impl Principal {
     }
 }
 
-fn cookie_value<'a>(parts: &'a Parts, name: &str) -> Option<String> {
+fn cookie_value(parts: &Parts, name: &str) -> Option<String> {
     let header = parts.headers.get(axum::http::header::COOKIE)?.to_str().ok()?;
     header.split(';').find_map(|kv| {
         let (k, v) = kv.trim().split_once('=')?;
@@ -72,15 +72,26 @@ impl FromRequestParts<SharedState> for Principal {
         if let Some(auth) = parts.headers.get(axum::http::header::AUTHORIZATION) {
             if let Ok(val) = auth.to_str() {
                 if let Some(tok) = val.strip_prefix("Bearer ") {
-                    let jwk = &state.key.jwk;
-                    let claims = token::validate_with_components(
-                        tok,
-                        &jwk.n,
-                        &jwk.e,
-                        &state.config.issuer,
-                        None,
-                    )
-                    .map_err(|e| ApiError::Unauthorized(e.to_string()))?;
+                    // Try every still-valid key (active, then recently
+                    // retired) so a token signed just before a rotation still
+                    // authenticates until it naturally expires.
+                    let jwks: Vec<_> = {
+                        let ring = state.key.read().unwrap();
+                        ring.verification_keys().cloned().collect()
+                    };
+                    let claims = jwks
+                        .iter()
+                        .find_map(|jwk| {
+                            token::validate_with_components(
+                                tok,
+                                &jwk.n,
+                                &jwk.e,
+                                &state.config.issuer,
+                                None,
+                            )
+                            .ok()
+                        })
+                        .ok_or_else(|| ApiError::Unauthorized("invalid or expired token".into()))?;
                     // Only access tokens may authorize API calls.
                     if claims.typ != "access" {
                         return Err(ApiError::Unauthorized(

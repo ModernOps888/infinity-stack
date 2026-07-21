@@ -6,6 +6,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+name = "data_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "infinity-data"
 path = "src/main.rs"
@@ -30,3 +34,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 base64.workspace = true
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }

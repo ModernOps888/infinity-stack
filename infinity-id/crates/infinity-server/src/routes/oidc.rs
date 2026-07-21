@@ -33,9 +33,11 @@ pub async fn discovery(State(st): State<SharedState>) -> Json<serde_json::Value>
     }))
 }
 
-/// Public JWKS document used by resource servers to validate tokens.
+/// Public JWKS document used by resource servers to validate tokens. Includes
+/// any keys retired by a rotation that are still within their validity
+/// window, so in-flight tokens keep validating.
 pub async fn jwks(State(st): State<SharedState>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(st.key.jwks()).unwrap())
+    Json(serde_json::to_value(st.key.read().unwrap().jwks()).unwrap())
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +66,8 @@ pub async fn mint_access_token(
         preferred_username: username.map(|s| s.to_string()),
         typ: typ.to_string(),
     };
-    Ok(issue(&st.key, &claims)?)
+    let active = st.key.read().unwrap().active.clone();
+    Ok(issue(&active, &claims)?)
 }
 
 pub async fn issue_refresh(

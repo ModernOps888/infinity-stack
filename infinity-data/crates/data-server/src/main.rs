@@ -1,16 +1,5 @@
 //! Infinity Data — single-node Rust-native analytics + vector database.
 
-mod assets;
-mod auth;
-mod config;
-mod error;
-mod ratelimit;
-mod routes;
-mod state;
-mod store;
-mod throttle;
-mod util;
-
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -19,16 +8,16 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use data_core::hnsw::HnswIndex;
+use data_server::config::Config;
+use data_server::ratelimit::IpRateLimiter;
+use data_server::state::AppState;
+use data_server::throttle::LoginThrottle;
+use data_server::{routes, store};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-use crate::config::Config;
-use crate::ratelimit::IpRateLimiter;
-use crate::state::AppState;
-use crate::throttle::LoginThrottle;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
