@@ -84,6 +84,20 @@ infinity-data/
 
 ---
 
+## 🆚 How it compares
+
+| | **Infinity Data** | Snowflake / Databricks | Pinecone |
+|---|---|---|---|
+| Open source | ✅ Apache-2.0 | ❌ | ❌ |
+| Self-hosted single binary | ✅ | ❌ | ❌ |
+| Per-credit / usage billing | ✅ none | ❌ | ❌ |
+| Vector search (HNSW) included | ✅ | ⚠️ separate product | ✅ |
+| Tabular analytics included | ✅ | ✅ | ❌ |
+| RBAC + audit included | ✅ | ⚠️ tiered | ⚠️ tiered |
+| Runtime footprint | 🟢 tiny (Rust), runs on a laptop | 🔴 cloud-compute only | n/a managed only |
+
+---
+
 ## 🚀 Quickstart
 
 ```bash

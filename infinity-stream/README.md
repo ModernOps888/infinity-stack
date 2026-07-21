@@ -81,6 +81,20 @@ infinity-stream/
 
 ---
 
+## 🆚 How it compares
+
+| | **Infinity Stream** | Kafka / Confluent | Elasticsearch | Algolia / Pusher |
+|---|---|---|---|---|
+| Open source | ✅ Apache-2.0 | ⚠️ partial | ⚠️ partial | ❌ |
+| Self-hosted single binary | ✅ | ❌ needs JVM + ZooKeeper/KRaft | ❌ JVM, RAM-hungry | ❌ |
+| Usage-spike billing | ✅ none | ⚠️ Confluent Cloud tiers | ⚠️ managed tiers | ❌ |
+| Durable topics + full-text search in one binary | ✅ | ❌ search not included | ⚠️ search only | ❌ streaming not included |
+| Realtime pub/sub (WebSocket) | ✅ | ⚠️ via Kafka Streams/Connect | ❌ | ✅ |
+| RBAC + scoped API keys | ✅ | ⚠️ tiered (ACLs, no built-in RBAC UI) | ⚠️ tiered | ⚠️ tiered |
+| Runtime footprint | 🟢 tiny (Rust) | 🔴 heavy (JVM) | 🔴 heavy (JVM) | n/a managed only |
+
+---
+
 ## 🚀 Quickstart
 
 ```bash

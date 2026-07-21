@@ -124,6 +124,19 @@ infinity-observe/
 
 ---
 
+## 🆚 How it compares
+
+| | **Infinity Observe** | Datadog / New Relic | Splunk | Sentry |
+|---|---|---|---|---|
+| Open source | ✅ Apache-2.0 | ❌ | ⚠️ partial | ⚠️ partial |
+| Self-hosted single binary | ✅ | ❌ | ⚠️ heavy | ⚠️ heavy |
+| Event-based billing | ✅ none | ❌ | ❌ | ❌ |
+| Logs + metrics + traces + alerts | ✅ | ✅ | ⚠️ tiered | ❌ traces/errors only |
+| RBAC included | ✅ | ⚠️ tiered | ⚠️ tiered | ⚠️ tiered |
+| Runtime footprint | 🟢 tiny (Rust) | n/a | 🔴 heavy | n/a |
+
+---
+
 ## 🚀 Quickstart
 
 ### Run locally (Rust)
